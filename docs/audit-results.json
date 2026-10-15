@@ -1,0 +1,8 @@
+{
+  "tests": 101,
+  "failures": 0,
+  "errors": 0,
+  "skipped": 0,
+  "success": true,
+  "platform": "Linux, Python 3.13, Tk 8.6 + Xvfb; Outlook mocked"
+}
