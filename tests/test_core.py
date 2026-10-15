@@ -77,18 +77,31 @@ class AddressTests(unittest.TestCase):
         with self.assertRaises(InputError):
             parse_cc("invalid address")
 
-    def test_excel_header_order_and_first_sheet(self):
+    def test_excel_fixed_columns_and_first_sheet(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "contacts.xlsx"
             book = Workbook()
             sheet = book.active
-            sheet.append(["備考", "メールアドレス", "氏名"])
-            sheet.append(["", "yamada@example.com", "山田 太郎"])
+            sheet.append(["氏名", "メールアドレス", "備考"])
+            sheet.append(["山田 太郎", "yamada@example.com", "読み込み対象外"])
             sheet.append([None, None, None])
             book.create_sheet("ignored").append(["無視する"])
             book.save(path)
             book.close()
             self.assertEqual(read_address_book(path).resolve("山田太郎"), "yamada@example.com")
+
+    def test_excel_reversed_or_shifted_columns_are_rejected(self):
+        for header, row in ((["メールアドレス", "氏名"], ["yamada@example.com", "山田 太郎"]),
+                            (["備考", "氏名", "メールアドレス"], ["", "山田 太郎", "yamada@example.com"])):
+            with self.subTest(header=header), tempfile.TemporaryDirectory() as directory:
+                path = Path(directory) / "contacts.xlsx"
+                book = Workbook()
+                book.active.append(header)
+                book.active.append(row)
+                book.save(path)
+                book.close()
+                with self.assertRaisesRegex(InputError, "A1.*B1"):
+                    read_address_book(path)
 
     def test_excel_invalid_rows_are_not_silently_dropped(self):
         for row in (["山田 太郎", "invalid"], [None, "a@example.com"], ["=A1", "a@example.com"]):

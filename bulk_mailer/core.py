@@ -194,9 +194,9 @@ def read_address_book(path: str | Path) -> AddressBook:
         sheet.reset_dimensions()
         rows = sheet.iter_rows(values_only=True)
         header = [str(cell).strip() if cell is not None else "" for cell in next(rows, ())]
-        if header.count("氏名") != 1 or header.count("メールアドレス") != 1:
-            raise InputError("先頭シートの1行目に「氏名」「メールアドレス」の列を1つずつ用意してください。")
-        name_column, email_column = header.index("氏名"), header.index("メールアドレス")
+        if header[:2] != ["氏名", "メールアドレス"]:
+            raise InputError("先頭シートの1行目はA1に「氏名」、B1に「メールアドレス」を入力してください。2行目以降のA列・B列を読み込みます。")
+        name_column, email_column = 0, 1
         contacts = []
         for number, row in enumerate(rows, start=2):
             if number > MAX_ADDRESS_ROWS + 1:

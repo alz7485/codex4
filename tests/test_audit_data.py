@@ -111,7 +111,7 @@ class AdversarialDataTests(unittest.TestCase):
     def test_sparse_excel_missing_email_reports_row(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "sparse.xlsx"
-            make_workbook(path, [["氏名", "備考", "メールアドレス"], ["山田"]])
+            make_workbook(path, [["氏名", "メールアドレス", "備考"], ["山田"]])
             with self.assertRaisesRegex(InputError, "2行目"):
                 read_address_book(path)
 
