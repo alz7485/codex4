@@ -363,7 +363,7 @@ class Layout:
         ttk.Separator(left).pack(fill="x", pady=14)
         ttk.Label(left, text="宛先の対応表", style="CardTitle.TLabel").pack(anchor="w", pady=(0, 9))
         ttk.Entry(left, textvariable=self.path_var, state="readonly").pack(fill="x", pady=(0, 8))
-        ttk.Label(left, text="1行目は見出し：A列「氏名」、B列「メールアドレス」。\n2行目以降を読み込みます。", style="CardMuted.TLabel", wraplength=430).pack(anchor="w", pady=(0, 10))
+        ttk.Label(left, text="A列「氏名」・B列「メールアドレス」、1行目は見出し。\n読込後はJSONに保存し、再読込で全件置換します。", style="CardMuted.TLabel", wraplength=430).pack(anchor="w", pady=(0, 10))
         self.contact_info = tk.StringVar(value="未登録：宛先Excelを読み込んでください。")
         ttk.Label(left, textvariable=self.contact_info, style="CardMuted.TLabel", wraplength=430).pack(anchor="w")
         controls = ttk.Frame(left, style="Surface.TFrame")

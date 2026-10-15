@@ -13,8 +13,8 @@ from uuid import uuid4
 
 from .core import (
     AddressBook, DEFAULT_TEMPLATE, FIELDS, InputError, MailItem, Settings,
-    data_directory, load_settings, parse_cc, parse_contracts, prepare_mails,
-    read_address_book, read_text_file, save_settings, validate_address, validate_body,
+    data_directory, load_contacts, load_settings, parse_cc, parse_contracts, prepare_mails,
+    read_address_book, read_text_file, save_contacts, save_settings, validate_address, validate_body,
 )
 from .outlook import apply_history, execute_batch
 from .design import Layout
@@ -37,6 +37,7 @@ class Application(Layout, tk.Tk):
         self.install_theme()
         self.directory = data_dir if data_dir is not None else data_directory()
         self.settings_path = self.directory / "settings.json"
+        self.contacts_path = self.directory / "contacts.json"
         initial_error = ""
         try:
             self.settings = load_settings(self.settings_path)
@@ -53,11 +54,18 @@ class Application(Layout, tk.Tk):
         self.protocol("WM_DELETE_WINDOW", self.close_app)
         self.build_shell()
         self.update_mode_label()
-        if self.settings.address_book_path:
+        if self.contacts_path.exists() or self.settings.address_book_path:
             try:
-                self.book = read_address_book(self.settings.address_book_path)
-                self.refresh_contacts()
-                self.contact_info.set(f"{len(self.book.contacts)}件の宛先を登録済み")
+                if self.contacts_path.exists():
+                    self.book, source_excel = load_contacts(self.contacts_path)
+                    self.settings.address_book_path = source_excel
+                    self.path_var.set(source_excel)
+                else:
+                    # Migrate the old Excel-path-only setting once.
+                    imported = read_address_book(self.settings.address_book_path)
+                    save_contacts(imported, self.contacts_path, self.settings.address_book_path)
+                    self.book = imported
+                self.contact_info.set(f"{len(self.book.contacts)}件の宛先をJSONから復元済み")
             except (InputError, OSError) as error:
                 initial_error += "\n" + str(error)
         if initial_error:
@@ -74,7 +82,7 @@ class Application(Layout, tk.Tk):
 
     def refresh_contacts(self) -> None:
         names = ["".join(contact.name.split()) for contact in self.book.contacts]
-        self.contact_info.set(f"{len(names)}件の宛先を読み込み済み（保存して一覧に反映してください）")
+        self.contact_info.set(f"{len(names)}件をJSON保存済み（設定を保存して一覧に反映）")
 
     def import_contacts(self) -> None:
         if self.busy:
@@ -84,13 +92,15 @@ class Application(Layout, tk.Tk):
             return
         try:
             book = read_address_book(path)
+            save_contacts(book, self.contacts_path, path)
         except (InputError, OSError) as error:
-            messagebox.showerror("Excel読込エラー", str(error), parent=self)
+            messagebox.showerror("宛先の読み込み・保存エラー", str(error), parent=self)
             return
         self.book = book
         self.contacts_dirty = True
         self.path_var.set(path)
         self.refresh_contacts()
+        self.status.set("宛先JSONを全件置換しました。設定を保存して一覧へ反映してください。")
 
     def show_contacts(self) -> None:
         if self.busy:
@@ -131,7 +141,7 @@ class Application(Layout, tk.Tk):
         try:
             candidate = self.form_settings()
             candidate.validate()
-            book = read_address_book(candidate.address_book_path) if candidate.address_book_path else AddressBook()
+            book = self.book
             replacements = prepare_mails([item.contract for item in self.items], candidate, book)
             apply_history(replacements, candidate.mode, self.directory / "logs")
             save_settings(candidate, self.settings_path)
@@ -149,7 +159,7 @@ class Application(Layout, tk.Tk):
                     self.items[index] = replacement
             self.refresh_table()
         self.refresh_contacts()
-        self.contact_info.set(f"{len(self.book.contacts)}件の宛先を登録済み")
+        self.contact_info.set(f"{len(self.book.contacts)}件の宛先をJSON保存済み")
         self.update_mode_label()
         self.status.set("設定を保存しました。" + ("未実行メールの内容を更新しました。" if self.items else ""))
 
@@ -450,8 +460,12 @@ class Application(Layout, tk.Tk):
         if self.busy:
             messagebox.showinfo("処理中", "Outlookの処理が完了してから終了してください。", parent=self)
             return
-        if self.has_unsaved_settings() and not messagebox.askyesno("未保存の設定", "保存していない設定があります。保存せずに終了しますか？", parent=self):
-            return
+        if self.has_unsaved_settings():
+            message = "保存していない設定があります。保存せずに終了しますか？"
+            if self.contacts_dirty:
+                message += "\n\nExcelから読み込んだ宛先JSONは保存済みです。"
+            if not messagebox.askyesno("未保存の設定", message, parent=self):
+                return
         self.destroy()
 
 

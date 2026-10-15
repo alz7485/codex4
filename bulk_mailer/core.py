@@ -28,6 +28,7 @@ MAX_TEXT_BYTES = 10 * 1024 * 1024
 MAX_TEXT_CHARACTERS = 5_000_000
 MAX_EXCEL_XML_BYTES = 100 * 1024 * 1024
 MAX_ADDRESS_ROWS = 100_000
+MAX_CONTACTS_JSON_BYTES = 100 * 1024 * 1024
 
 
 class InputError(ValueError):
@@ -285,21 +286,78 @@ def load_settings(path: Path) -> Settings:
         raise InputError(f"設定ファイルを読み込めません: {path}\n{error}") from error
 
 
-def save_settings(settings: Settings, path: Path) -> None:
-    settings.validate()
+def _write_json_atomic(payload: dict, path: Path, max_bytes: int | None = None) -> None:
+    text = json.dumps(payload, ensure_ascii=False, indent=2)
+    if max_bytes is not None and len(text.encode("utf-8")) > max_bytes:
+        raise InputError("宛先JSONが大きすぎます。Excelを分割して読み込み直してください。")
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = None
     try:
         with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=path.parent,
                                          prefix=path.name + ".", suffix=".tmp", delete=False) as output:
             temporary = Path(output.name)
-            output.write(json.dumps(asdict(settings), ensure_ascii=False, indent=2))
+            output.write(text)
             output.flush()
             os.fsync(output.fileno())
         temporary.replace(path)
     finally:
         if temporary is not None:
             temporary.unlink(missing_ok=True)
+
+
+def save_settings(settings: Settings, path: Path) -> None:
+    settings.validate()
+    _write_json_atomic(asdict(settings), path)
+
+
+def _parse_contacts_payload(payload: dict) -> tuple[AddressBook, str]:
+    if (not isinstance(payload, dict) or type(payload.get("version")) is not int
+            or payload.get("version") != 1 or not isinstance(payload.get("source_excel"), str)
+            or not isinstance(payload.get("contacts"), list)):
+        raise InputError("宛先JSONの形式が不正です。Excelから読み込み直してください。")
+    records = payload["contacts"]
+    if _has_unsafe_controls(payload["source_excel"]):
+        raise InputError("宛先JSONの元Excelパスに不正な文字が含まれています。")
+    if len(records) > MAX_ADDRESS_ROWS:
+        raise InputError("宛先JSONの件数が多すぎます。10万件以下にしてください。")
+    contacts = []
+    estimated_bytes = len(payload["source_excel"].encode("utf-8")) + 128
+    for number, row in enumerate(records, 1):
+        if (not isinstance(row, dict) or not isinstance(row.get("name"), str)
+                or not isinstance(row.get("email"), str)):
+            raise InputError(f"宛先JSONの{number}件目: 氏名とメールアドレスは文字列で指定してください。")
+        name = row["name"].strip()
+        if not name or _has_unsafe_controls(name, "\t"):
+            raise InputError(f"宛先JSONの{number}件目: 氏名が空欄、または不正な文字を含んでいます。")
+        try:
+            address = validate_address(row["email"])
+            estimated_bytes += len(name.encode("utf-8")) + len(address.encode("utf-8")) + 96
+            if estimated_bytes > MAX_CONTACTS_JSON_BYTES:
+                raise InputError("宛先JSONが大きすぎます。Excelを分割して読み込み直してください。")
+            contacts.append(Contact(name, address))
+        except InputError as error:
+            raise InputError(f"宛先JSONの{number}件目: {error}") from error
+    return AddressBook(contacts), payload["source_excel"]
+
+
+def save_contacts(book: AddressBook, path: Path, source_excel: str = "") -> None:
+    """Replace the complete address book only after validation and durable write."""
+    payload = {"version": 1, "source_excel": source_excel,
+               "contacts": [asdict(contact) for contact in book.contacts]}
+    checked, _ = _parse_contacts_payload(payload)
+    payload["contacts"] = [asdict(contact) for contact in checked.contacts]
+    _write_json_atomic(payload, path, MAX_CONTACTS_JSON_BYTES)
+
+
+def load_contacts(path: Path) -> tuple[AddressBook, str]:
+    try:
+        with path.open("rb") as source:
+            data = source.read(MAX_CONTACTS_JSON_BYTES + 1)
+        if len(data) > MAX_CONTACTS_JSON_BYTES:
+            raise InputError("宛先JSONが大きすぎます。Excelを分割して読み込み直してください。")
+        return _parse_contacts_payload(json.loads(data.decode("utf-8")))
+    except (ValueError, TypeError, OSError) as error:
+        raise InputError(f"宛先JSONを読み込めません: {path}\n{error}") from error
 
 
 @dataclass

@@ -90,12 +90,16 @@ class AuditUsageTests(unittest.TestCase):
         self.assertTrue(self.app.items[0].reviewed)
         self.errors.assert_called_once()
 
-    def test_save_reloads_modified_excel_and_clears_review(self):
+    def test_save_uses_json_snapshot_until_excel_is_reimported(self):
         self.app.review_selected()
         self.write_book("new@example.com")
         self.app.save_config()
-        self.assertEqual(self.app.items[0].to, "new@example.com")
+        self.assertEqual(self.app.items[0].to, "old@example.com")
         self.assertFalse(self.app.items[0].reviewed)
+        with patch("bulk_mailer.gui.filedialog.askopenfilename", return_value=str(self.book_path)):
+            self.app.import_contacts()
+        self.app.save_config()
+        self.assertEqual(self.app.items[0].to, "new@example.com")
 
     def test_cancelled_regeneration_preserves_individual_content(self):
         item = self.app.items[0]
