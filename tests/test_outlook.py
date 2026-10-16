@@ -14,8 +14,6 @@ class OutlookTests(unittest.TestCase):
         contracts = parse_contracts("\n\n".join(record(f"K-{number:03d}") for number in range(count)))
         items = prepare_mails(contracts, Settings(subject="共通件名", cc="cc@example.com"),
                               AddressBook([Contact("山田 太郎", "yamada@example.com")]))
-        for item in items:
-            item.reviewed = True
         return items
 
     def test_outlook_draft_and_send_paths(self):
@@ -54,7 +52,7 @@ class OutlookTests(unittest.TestCase):
 
     def test_all_items_prevalidated_before_outlook(self):
         items = self.make_items(2)
-        items[1].reviewed = False
+        items[1].to = "invalid"
         factory = Mock()
         with tempfile.TemporaryDirectory() as directory, self.assertRaises(InputError):
             execute_batch(items, "send", Path(directory) / "log.jsonl", lambda *_: None, factory)

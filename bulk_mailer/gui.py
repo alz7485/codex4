@@ -251,25 +251,30 @@ class Application(Layout, TkinterDnD.Tk):
         index = int(selection[0])
         return self.items[index] if index < len(self.items) else None
 
+    @staticmethod
+    def mail_problem(item: MailItem) -> str:
+        try:
+            item.validate_content()
+        except InputError as error:
+            return str(error)
+        if "要確認" in item.status:
+            return "実行結果が不確定です。Outlookと処理記録を確認してください。"
+        return ""
+
     def refresh_table(self) -> None:
         selected = self.table.selection()
         scroll_y, scroll_x = self.table.yview(), self.table.xview()
         self.table.delete(*self.table.get_children())
         for index, item in enumerate(self.items):
             values = item.contract.values
+            problem = self.mail_problem(item)
             status = item.status
             if item.status == "未実行":
-                status = "要修正" if item.issue else ("確認済み" if item.reviewed else "未確認")
-            tags = ["alternate"] if index % 2 else []
-            if item.issue or "要確認" in status:
-                tags.append("error")
-            elif item.status != "未実行":
-                tags.append("done")
-            elif item.reviewed:
-                tags.append("reviewed")
+                status = problem or "作成待ち"
+            tags = ("error",) if problem else ()
             self.table.insert("", "end", iid=str(index), values=(
-                "✓" if item.included else "—", "済" if item.reviewed else "未確認", values["管理番号"],
-                values["氏名"], item.to, status), tags=tuple(tags))
+                "✓" if item.included else "—", values["管理番号"],
+                values["氏名"], item.to, status), tags=tags)
         if selected and int(selected[0]) < len(self.items):
             self.table.selection_set(selected[0])
         if scroll_y:
@@ -277,11 +282,8 @@ class Application(Layout, TkinterDnD.Tk):
         if scroll_x:
             self.table.xview_moveto(scroll_x[0])
         pending = [item for item in self.items if item.included and item.status == "未実行"]
-        reviewed = sum(item.reviewed for item in pending)
-        issues = sum(bool(item.issue) for item in pending)
-        for variable, value in zip(self.metric_vars, (len(self.items), len(pending), reviewed, issues)):
-            variable.set(str(value))
-        self.summary.set(f"対象 {len(pending)}件  ·  確認済み {reviewed}件" + (f"  ·  要修正 {issues}件" if issues else ""))
+        issues = sum(bool(self.mail_problem(item)) for item in pending)
+        self.summary.set(f"全 {len(self.items)}件  ·  作成対象 {len(pending)}件" + (f"  ·  要修正 {issues}件" if issues else ""))
         self.show_preview()
 
     def show_preview(self) -> None:
@@ -300,7 +302,8 @@ class Application(Layout, TkinterDnD.Tk):
         self.preview_to.set(item.to or "未確定：宛先を指定してください")
         self.preview_cc.set("; ".join(item.cc) or "なし")
         self.preview_subject.set(item.subject or "件名未設定：設定で登録してください")
-        self.preview_issue.set("要修正：" + item.issue if item.issue else ("✓  内容の確認済み" if item.reviewed else "宛先・本文を確認し、確認済みにしてください。"))
+        problem = self.mail_problem(item)
+        self.preview_issue.set("要修正：" + problem if problem else "")
         readonly_text(self.preview, item.body)
         readonly_text(self.record_preview, "\n\n".join(f"{key}  {values[key]}" for key in FIELDS))
 
@@ -349,49 +352,11 @@ class Application(Layout, TkinterDnD.Tk):
             item.to, item.cc, item.body = address, cc, content
             if not item.issue.startswith("管理番号が重複"):
                 item.issue = ""
-            item.reviewed = False
             window.destroy()
             self.refresh_table()
 
         ttk.Button(window, text="変更を反映", style="Primary.TButton", command=save).grid(row=4, column=1, sticky="e", padx=12, pady=12)
         window.grab_set()
-
-    def mark_reviewed(self, items: list[MailItem]) -> None:
-        for item in items:
-            was_reviewed = item.reviewed
-            item.reviewed = True
-            try:
-                item.validate()
-            except InputError as error:
-                raise InputError(f"管理番号 {item.contract.values['管理番号']}: {error}") from error
-            finally:
-                item.reviewed = was_reviewed
-        for item in items:
-            item.reviewed = True
-        self.refresh_table()
-
-    def review_selected(self) -> None:
-        if self.busy:
-            return
-        item = self.selected_item()
-        if item is None or item.status != "未実行":
-            return
-        try:
-            self.mark_reviewed([item])
-        except InputError as error:
-            messagebox.showerror("確認できません", str(error), parent=self)
-
-    def review_all(self) -> None:
-        if self.busy:
-            return
-        items = [item for item in self.items if item.included and item.status == "未実行"]
-        if not items:
-            return
-        if messagebox.askyesno("全対象の内容確認", f"対象{len(items)}件の宛先・件名・本文を確認しましたか？\n全対象を確認済みにします。", parent=self):
-            try:
-                self.mark_reviewed(items)
-            except InputError as error:
-                messagebox.showerror("確認できません", str(error), parent=self)
 
     def set_busy(self, busy: bool) -> None:
         self.busy = busy
@@ -444,7 +409,7 @@ class Application(Layout, TkinterDnD.Tk):
         action = "送信します" if mode == "send" else "Outlookの下書きに保存します"
         detail = "\n送信にはOutlookの既定アカウントを使用します。" if mode == "send" else ""
         if not messagebox.askyesno("送信確認" if mode == "send" else "下書き保存の確認",
-                                  f"{len(items)}件のメールを{action}。\n件名: {self.settings.subject}{detail}\n\n実行しますか？", parent=self):
+                                  f"一覧で全件の宛先・本文を確認しましたか？\n\n{len(items)}件のメールを{action}。\n件名: {self.settings.subject}{detail}\n\n実行しますか？", parent=self):
             return
         self.set_busy(True)
         self.status.set(f"{len(items)}件を処理しています。")

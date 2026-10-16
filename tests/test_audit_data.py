@@ -79,7 +79,6 @@ class AdversarialDataTests(unittest.TestCase):
             with self.subTest(changes=changes), tempfile.TemporaryDirectory() as directory:
                 item = prepare_mails(parse_contracts(record()), Settings(subject="共通件名"),
                                      AddressBook([Contact("山田 太郎", "a@example.com")]))[0]
-                item.reviewed = True
                 for attribute, value in changes.items():
                     setattr(item, attribute, value)
                 factory = MagicMock()

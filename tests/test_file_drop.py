@@ -92,7 +92,6 @@ class FileDropTests(unittest.TestCase):
     def test_excel_drop_replaces_json_but_requires_settings_save(self):
         self.app.source.insert("1.0", record())
         self.app.create_list()
-        self.app.review_selected()
         self.assertEqual(self.drop(self.make_excel(), widget=self.app.preview_tabs), COPY)
         stored, _ = load_contacts(self.app.contacts_path)
         self.assertEqual(stored.contacts, [Contact("山田　太郎", "new@example.com")])
@@ -101,7 +100,6 @@ class FileDropTests(unittest.TestCase):
         self.assertEqual(self.app.items[0].to, "old@example.com")
         self.app.save_config()
         self.assertEqual(self.app.items[0].to, "new@example.com")
-        self.assertFalse(self.app.items[0].reviewed)
 
     def test_broken_excel_drop_preserves_previous_json_and_memory(self):
         previous = self.app.contacts_path.read_bytes()

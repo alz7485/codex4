@@ -24,8 +24,6 @@ class OperationsAuditTests(unittest.TestCase):
         contracts = parse_contracts("\n\n".join(record(f"AUDIT-{i}") for i in range(count)))
         items = prepare_mails(contracts, Settings(subject="監査用件名"),
                               AddressBook([Contact("山田 太郎", "audit@example.com")]))
-        for item in items:
-            item.reviewed = True
         return items
 
     def client(self):
@@ -131,7 +129,6 @@ class OperationsAuditTests(unittest.TestCase):
                 apply_history(items, mode, self.directory)
                 self.assertEqual(items[0].status, f"履歴あり（{display}）")
                 self.assertFalse(items[0].included)
-                self.assertFalse(items[0].reviewed)
                 self.assertEqual(items[1].status, "未実行")
                 with self.assertRaises(InputError):
                     items[0].validate()

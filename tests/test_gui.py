@@ -34,25 +34,53 @@ class GuiTests(unittest.TestCase):
         self.assertEqual(self.app.preview_subject.get(), "共通の件名")
         self.assertIn("山田 太郎", self.app.preview.get("1.0", "end"))
         self.assertIn("第一チーム", self.app.record_preview.get("1.0", "end"))
-        self.assertEqual([variable.get() for variable in self.app.metric_vars], ["1", "1", "0", "0"])
+        self.assertEqual(tuple(self.app.table.cget("columns")), ("included", "id", "name", "to", "status"))
+        self.assertEqual(self.app.table.set("0", "status"), "作成待ち")
+        self.assertEqual(tuple(self.app.table.item("0", "tags")), ())
 
-    def test_review_and_exclusion_update_metrics(self):
-        self.app.review_selected()
-        self.assertTrue(self.app.items[0].reviewed)
-        self.assertEqual(self.app.metric_vars[2].get(), "1")
+    def test_exclusion_updates_compact_summary_without_coloring_valid_row(self):
         self.app.toggle_included()
         self.assertFalse(self.app.items[0].included)
-        self.assertEqual(self.app.metric_vars[1].get(), "0")
+        self.assertIn("作成対象 0件", self.app.summary.get())
+        self.assertEqual(tuple(self.app.table.item("0", "tags")), ())
 
-    def test_settings_change_rebuilds_pending_mail_and_clears_review(self):
-        self.app.review_selected()
+    def test_settings_change_rebuilds_pending_mail(self):
         self.app.subject_var.set("新しい共通件名")
         self.app.cc_input.insert("1.0", "cc@example.com")
         self.app.save_config()
         self.assertEqual(self.app.items[0].subject, "新しい共通件名")
         self.assertEqual(self.app.items[0].cc, ("cc@example.com",))
-        self.assertFalse(self.app.items[0].reviewed)
         self.assertEqual(self.app.preview_subject.get(), "新しい共通件名")
+
+    def test_only_problem_rows_are_colored_and_correction_clears_color(self):
+        from bulk_mailer.core import parse_contracts, prepare_mails
+        self.app.items = prepare_mails(parse_contracts(record() + "\n\n" + record("K-002", "未登録の氏名")),
+                                      self.app.settings, self.app.book)
+        self.app.refresh_table()
+        self.assertEqual(tuple(self.app.table.item("0", "tags")), ())
+        self.assertEqual(tuple(self.app.table.item("1", "tags")), ("error",))
+        self.assertIn("宛先未登録", self.app.table.set("1", "status"))
+        self.app.items[1].to, self.app.items[1].issue = "fixed@example.com", ""
+        self.app.refresh_table()
+        self.assertEqual(tuple(self.app.table.item("1", "tags")), ())
+        self.assertEqual(self.app.table.set("1", "status"), "作成待ち")
+        self.app.items[0].status = "下書き保存済み"
+        self.app.refresh_table()
+        self.assertEqual(tuple(self.app.table.item("0", "tags")), ())
+        self.app.items[0].status = "要確認（再実行不可）"
+        self.app.refresh_table()
+        self.assertEqual(tuple(self.app.table.item("0", "tags")), ("error",))
+
+    def test_missing_subject_colors_rows_and_settings_save_clears_color(self):
+        self.app.subject_var.set("")
+        self.app.save_config()
+        self.assertEqual(tuple(self.app.table.item("0", "tags")), ("error",))
+        self.assertIn("件名", self.app.table.set("0", "status"))
+        self.assertIn("件名", self.app.preview_issue.get())
+        self.app.subject_var.set("設定済み件名")
+        self.app.save_config()
+        self.assertEqual(tuple(self.app.table.item("0", "tags")), ())
+        self.assertEqual(self.app.preview_issue.get(), "")
 
     def test_mode_save_changes_visible_execution_action(self):
         self.app.mode_var.set("send")

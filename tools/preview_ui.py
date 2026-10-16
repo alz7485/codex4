@@ -41,7 +41,6 @@ def main():
         capture("input.png")
         app.create_list()
         assert len(app.items) == 3
-        app.mark_reviewed([app.items[0]])
         app.table.selection_set("0")
         app.show_preview()
         app.status.set("サンプルデータ 3件を表示しています。")

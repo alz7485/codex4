@@ -79,10 +79,6 @@ class Layout:
         style.configure("Heading.TLabel", font=(self.ui_font, 23, "bold"))
         style.configure("CardTitle.TLabel", background=WHITE, font=(self.ui_font, 11, "bold"))
         style.configure("Subject.TLabel", background=WHITE, font=(self.ui_font, 12, "bold"))
-        style.configure("Metric.TLabel", background=WHITE, font=(self.ui_font, 25, "bold"))
-        style.configure("MetricBlue.TLabel", background=WHITE, foreground=BLUE, font=(self.ui_font, 25, "bold"))
-        style.configure("MetricGreen.TLabel", background=WHITE, foreground="#168069", font=(self.ui_font, 25, "bold"))
-        style.configure("MetricOrange.TLabel", background=WHITE, foreground="#c47a21", font=(self.ui_font, 25, "bold"))
         style.configure("TButton", background=WHITE, foreground=INK, bordercolor=LINE, borderwidth=1,
                         padding=(13, 8), focusthickness=0, font=(self.ui_font, 9))
         style.map("TButton", background=[("active", "#edf2fa"), ("disabled", "#f2f4f8")],
@@ -238,19 +234,7 @@ class Layout:
 
     def build_review(self):
         page = self.review_page
-        self.heading(page, "作成対象を確認", "宛先と本文を確認し、必要なメールだけを下書き保存・送信します。")
-        metrics = ttk.Frame(page, style="Page.TFrame")
-        metrics.pack(fill="x", pady=(0, 18))
-        self.metric_vars = [tk.StringVar(value="0") for _ in range(4)]
-        for index, (title, caption, style_name) in enumerate((("取り込み件数", "契約ごとに1通を作成", "Metric.TLabel"),
-                ("作成対象", "除外したメールを除く", "MetricBlue.TLabel"), ("確認済み", "対象の内容確認が完了", "MetricGreen.TLabel"),
-                ("要修正", "宛先・入力内容を確認", "MetricOrange.TLabel"))):
-            metrics.columnconfigure(index, weight=1, uniform="metric")
-            tile = card(metrics, padding=(18, 12))
-            tile.grid(row=0, column=index, sticky="ew", padx=(0, 12 if index < 3 else 0))
-            ttk.Label(tile, text=title, style="CardMuted.TLabel").pack(anchor="w")
-            ttk.Label(tile, textvariable=self.metric_vars[index], style=style_name).pack(anchor="w", pady=(2, 0))
-            ttk.Label(tile, text=caption, style="CardMuted.TLabel").pack(anchor="w")
+        self.heading(page, "作成対象を確認", "一覧で全件の宛先・本文を確認してから、下書き保存・送信します。問題がある行だけ色で表示します。")
 
         panes = ttk.Panedwindow(page, orient="horizontal")
         panes.pack(fill="both", expand=True)
@@ -260,14 +244,13 @@ class Layout:
         bar = ttk.Frame(list_card, style="Surface.TFrame")
         bar.pack(fill="x", pady=(0, 14))
         ttk.Label(bar, text="対象一覧", style="CardTitle.TLabel").pack(side="left")
-        ttk.Button(bar, text="全対象を確認済みにする", command=self.review_all).pack(side="right")
         table_frame = ttk.Frame(list_card, style="Surface.TFrame")
         table_frame.pack(fill="both", expand=True)
-        columns = ("included", "reviewed", "id", "name", "to", "status")
+        columns = ("included", "id", "name", "to", "status")
         self.table = ttk.Treeview(table_frame, columns=columns, show="headings", selectmode="browse", height=8)
-        for column, heading, width in zip(columns, ("対象", "確認", "管理番号", "氏名", "To", "状態"), (44, 56, 83, 100, 175, 96)):
+        for column, heading, width in zip(columns, ("対象", "管理番号", "氏名", "To", "状態・問題"), (44, 83, 100, 175, 160)):
             self.table.heading(column, text=heading)
-            self.table.column(column, width=width, minwidth=40, stretch=column == "to", anchor="center" if column in ("included", "reviewed") else "w")
+            self.table.column(column, width=width, minwidth=40, stretch=column == "to", anchor="center" if column == "included" else "w")
         vertical = ttk.Scrollbar(table_frame, orient="vertical", command=self.table.yview)
         horizontal = ttk.Scrollbar(table_frame, orient="horizontal", command=self.table.xview)
         self.table.configure(yscrollcommand=vertical.set, xscrollcommand=horizontal.set)
@@ -276,17 +259,14 @@ class Layout:
         horizontal.grid(row=1, column=0, sticky="ew")
         table_frame.rowconfigure(0, weight=1)
         table_frame.columnconfigure(0, weight=1)
-        self.table.tag_configure("alternate", background="#fafbfd")
         self.table.tag_configure("error", foreground="#b66a16", background="#fff8ee")
-        self.table.tag_configure("reviewed", foreground="#168069")
-        self.table.tag_configure("done", foreground=MUTED)
         self.table.bind("<<TreeviewSelect>>", lambda _: self.show_preview())
         self.table.bind("<Double-1>", lambda _: self.edit_mail())
         self.table.bind("<space>", lambda _: self.toggle_included())
         self.table.bind("<ButtonRelease-1>", self.on_table_click)
         tools = ttk.Frame(list_card, style="Surface.TFrame")
         tools.pack(side="bottom", before=table_frame, fill="x", pady=(14, 0))
-        for title, command in (("対象／除外", self.toggle_included), ("宛先・本文を編集", self.edit_mail), ("確認済みにする", self.review_selected)):
+        for title, command in (("対象／除外", self.toggle_included), ("宛先・本文を編集", self.edit_mail)):
             ttk.Button(tools, text=title, command=command).pack(side="left", padx=(0, 7))
 
         preview_card = card(panes, 18)
@@ -395,7 +375,7 @@ class Layout:
             ttk.Button(chips, text=name, command=lambda n=name: self.insert_field(n), padding=(9, 6)).grid(row=index // 4, column=index % 4, sticky="w", padx=(0, 5), pady=(0, 6))
         bottom = ttk.Frame(page, style="Page.TFrame")
         bottom.pack(side="bottom", before=panels, fill="x", pady=(18, 0))
-        ttk.Label(bottom, text="保存すると未実行メールを更新し、確認済みを解除します。", style="Muted.TLabel").pack(side="left")
+        ttk.Label(bottom, text="保存すると未実行メールを更新します。一覧で内容を確認してください。", style="Muted.TLabel").pack(side="left")
         ttk.Button(bottom, text="設定を保存して反映", style="Primary.TButton", command=self.save_config).pack(side="right")
 
     def insert_field(self, name):

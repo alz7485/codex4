@@ -132,7 +132,6 @@ class ContactsJsonGuiTests(unittest.TestCase):
         self.assertFalse(self.app.has_unsaved_settings())
 
     def test_import_immediately_persists_full_replacement(self):
-        self.app.review_selected()
         updated = self.path / "updated.xlsx"
         self.write_excel(updated, [("山田 太郎", "new@example.com")])
         self.import_excel(updated)
@@ -143,7 +142,6 @@ class ContactsJsonGuiTests(unittest.TestCase):
         self.assertEqual(self.app.items[0].to, "old@example.com")
         self.app.save_config()
         self.assertEqual(self.app.items[0].to, "new@example.com")
-        self.assertFalse(self.app.items[0].reviewed)
 
     def test_restart_after_import_without_settings_save_uses_json(self):
         updated = self.path / "updated.xlsx"
@@ -156,8 +154,7 @@ class ContactsJsonGuiTests(unittest.TestCase):
         self.assertEqual(self.app.items[0].to, "new@example.com")
         self.assertEqual(self.app.path_var.get(), str(updated))
 
-    def test_broken_excel_keeps_json_and_reviewed_list(self):
-        self.app.review_selected()
+    def test_broken_excel_keeps_json_and_existing_list(self):
         previous = (self.path / "contacts.json").read_bytes()
         broken = self.path / "broken.xlsx"
         broken.write_bytes(b"broken workbook")
@@ -166,7 +163,6 @@ class ContactsJsonGuiTests(unittest.TestCase):
         error.assert_called_once()
         self.assertEqual((self.path / "contacts.json").read_bytes(), previous)
         self.assertEqual(self.app.book.resolve("山田太郎"), "old@example.com")
-        self.assertTrue(self.app.items[0].reviewed)
         self.assertFalse(self.app.contacts_dirty)
 
     def test_cache_write_failure_does_not_activate_new_contacts(self):

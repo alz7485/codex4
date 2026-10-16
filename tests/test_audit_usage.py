@@ -71,7 +71,6 @@ class AuditUsageTests(unittest.TestCase):
         return window, entries, body, save
 
     def test_unsaved_subject_blocks_execution(self):
-        self.app.review_selected()
         self.app.subject_var.set("未保存の件名")
         self.app.execute()
         self.execute_mock.assert_not_called()
@@ -82,20 +81,16 @@ class AuditUsageTests(unittest.TestCase):
         self.app.create_list()
         self.assertIs(self.app.items[0], original)
 
-    def test_invalid_save_keeps_existing_settings_and_review(self):
-        self.app.review_selected()
+    def test_invalid_save_keeps_existing_settings(self):
         self.app.cc_input.insert("1.0", "not-an-email")
         self.app.save_config()
         self.assertEqual(self.app.settings.cc, "")
-        self.assertTrue(self.app.items[0].reviewed)
         self.errors.assert_called_once()
 
     def test_save_uses_json_snapshot_until_excel_is_reimported(self):
-        self.app.review_selected()
         self.write_book("new@example.com")
         self.app.save_config()
         self.assertEqual(self.app.items[0].to, "old@example.com")
-        self.assertFalse(self.app.items[0].reviewed)
         with patch("bulk_mailer.gui.filedialog.askopenfilename", return_value=str(self.book_path)):
             self.app.import_contacts()
         self.app.save_config()
@@ -117,36 +112,48 @@ class AuditUsageTests(unittest.TestCase):
         self.assertIs(self.app.items[0], item)
         self.errors.assert_called_once()
 
-    def test_unreviewed_and_excluded_rows_cannot_execute(self):
-        self.app.execute()
-        self.execute_mock.assert_not_called()
-        self.app.review_selected()
+    def test_excluded_rows_cannot_execute(self):
         self.app.toggle_included()
         self.app.execute()
         self.execute_mock.assert_not_called()
+
+    def test_all_valid_rows_execute_after_one_final_dialog_without_review_flags(self):
+        self.app.source.delete("1.0", "end")
+        self.app.source.insert("1.0", record() + "\n\n" + record("K-002"))
+        with patch("bulk_mailer.gui.messagebox.askyesno", return_value=True):
+            self.app.create_list()
+        self.assertEqual(len(self.app.items), 2)
+        with patch("bulk_mailer.gui.messagebox.askyesno", return_value=True) as dialog, \
+             patch("bulk_mailer.gui.threading.Thread") as thread:
+            self.app.execute()
+        dialog.assert_called_once()
+        self.assertIn("一覧で全件", dialog.call_args.args[1])
+        thread.assert_called_once()
+        thread.return_value.start.assert_called_once()
+        # Run the captured worker synchronously; Outlook itself remains mocked.
+        thread.call_args.kwargs["target"]()
+        self.execute_mock.assert_called_once()
+        self.assertEqual(self.execute_mock.call_args.args[0], self.app.items)
 
     def test_busy_blocks_all_modifying_commands(self):
         item = self.app.items[0]
         self.app.set_busy(True)
         for command in (self.app.create_list, self.app.save_config, self.app.import_contacts,
-                        self.app.load_text, self.app.toggle_included, self.app.review_selected,
-                        self.app.review_all, self.app.edit_mail, self.app.execute):
+                        self.app.load_text, self.app.toggle_included,
+                        self.app.edit_mail, self.app.execute):
             command()
         self.assertIs(self.app.items[0], item)
         self.assertTrue(item.included)
-        self.assertFalse(item.reviewed)
         self.execute_mock.assert_not_called()
         self.app.set_busy(False)
 
     def test_cancelled_execution_never_starts_worker(self):
-        self.app.review_selected()
         with patch("bulk_mailer.gui.messagebox.askyesno", return_value=False):
             self.app.execute()
         self.assertFalse(self.app.busy)
         self.execute_mock.assert_not_called()
 
-    def test_individual_long_unicode_edit_roundtrip_resets_review(self):
-        self.app.review_selected()
+    def test_individual_long_unicode_edit_roundtrip(self):
         window, entries, body, save = self.edit_controls()
         entries[0].delete(0, "end")
         entries[0].insert(0, "manual@example.com")
@@ -159,10 +166,8 @@ class AuditUsageTests(unittest.TestCase):
         self.assertEqual(item.to, "manual@example.com")
         self.assertEqual(item.cc, ("first@example.com", "second@example.com"))
         self.assertEqual(item.body, content)
-        self.assertFalse(item.reviewed)
 
     def test_invalid_individual_edit_does_not_mutate_item(self):
-        self.app.review_selected()
         original_body = self.app.items[0].body
         window, entries, body, save = self.edit_controls()
         entries[0].delete(0, "end")
@@ -173,7 +178,6 @@ class AuditUsageTests(unittest.TestCase):
         item = self.app.items[0]
         self.assertEqual(item.to, "old@example.com")
         self.assertEqual(item.body, original_body)
-        self.assertTrue(item.reviewed)
         self.errors.assert_called_once()
         window.destroy()
 
@@ -202,9 +206,8 @@ class AuditUsageTests(unittest.TestCase):
         self.assertFalse(self.app.busy)
         self.assertFalse(item.included)
 
-    def test_same_path_excel_reload_exposes_stale_reviewed_recipient(self):
-        """Regression probe: contact import must invalidate existing review state."""
-        self.app.review_selected()
+    def test_same_path_excel_reload_requires_applying_new_recipient(self):
+        """A replacement address book must be applied before execution."""
         self.write_book("new@example.com")
         with patch("bulk_mailer.gui.filedialog.askopenfilename", return_value=str(self.book_path)):
             self.app.import_contacts()
@@ -212,12 +215,12 @@ class AuditUsageTests(unittest.TestCase):
         # A same-path reload must require an explicit apply before execution.
         self.assertTrue(self.app.has_unsaved_settings())
 
-    def test_same_path_reload_blocks_execution_until_successful_save_and_recheck(self):
-        self.app.review_selected()
+    def test_same_path_reload_blocks_execution_until_successful_save(self):
         self.write_book("new@example.com")
         with patch("bulk_mailer.gui.filedialog.askopenfilename", return_value=str(self.book_path)):
             self.app.import_contacts()
-        with patch("bulk_mailer.gui.threading.Thread") as thread:
+        with patch("bulk_mailer.gui.messagebox.askyesno", return_value=True), \
+             patch("bulk_mailer.gui.threading.Thread") as thread:
             self.app.execute()
         thread.assert_not_called()
         self.app.cc_input.insert("1.0", "invalid")
@@ -228,14 +231,13 @@ class AuditUsageTests(unittest.TestCase):
         self.app.save_config()
         self.assertFalse(self.app.has_unsaved_settings())
         self.assertEqual(self.app.items[0].to, "new@example.com")
-        self.assertFalse(self.app.items[0].reviewed)
-        with patch("bulk_mailer.gui.threading.Thread") as thread:
+        with patch("bulk_mailer.gui.messagebox.askyesno", return_value=True), \
+             patch("bulk_mailer.gui.threading.Thread") as thread:
             self.app.execute()
-        thread.assert_not_called()
+        thread.assert_called_once()
 
     def test_modified_source_requires_rebuild_before_execution(self):
         """Regression probe: edited input must not execute the stale list."""
-        self.app.review_selected()
         self.app.source.insert("end-1c", "\n管理番号の追記")
         with patch("bulk_mailer.gui.messagebox.askyesno", return_value=True), \
              patch("bulk_mailer.gui.threading.Thread") as thread:
@@ -246,20 +248,18 @@ class AuditUsageTests(unittest.TestCase):
         self.app.source.insert("end-1c", "\n変更")
         self.app.subject_var.set("新しい件名")
         self.app.save_config()
-        self.app.review_selected()
         with patch("bulk_mailer.gui.messagebox.askyesno", return_value=True), \
              patch("bulk_mailer.gui.threading.Thread") as thread:
             self.app.execute()
         thread.assert_not_called()
 
-    def test_rebuilt_source_updates_snapshot_and_requires_review(self):
+    def test_rebuilt_source_updates_snapshot(self):
         self.app.source.delete("1.0", "end")
         self.app.source.insert("1.0", record(number="K-002"))
         with patch("bulk_mailer.gui.messagebox.askyesno", return_value=True):
             self.app.create_list()
         self.assertEqual(self.app.items[0].contract.values["管理番号"], "K-002")
         self.assertEqual(self.app.source_snapshot, self.app.source.get("1.0", "end-1c"))
-        self.assertFalse(self.app.items[0].reviewed)
 
     def test_progress_burst_coalesces_table_redraws(self):
         """Regression probe: queued progress should not rebuild all rows per event."""

@@ -152,7 +152,6 @@ class MailTests(unittest.TestCase):
         settings.validate()
         items = prepare_mails(self.contracts, settings, self.book)
         self.assertIn("山田 太郎", items[0].body)
-        items[0].reviewed = True
         with self.assertRaisesRegex(InputError, "件名"):
             items[0].validate()
         with self.assertRaisesRegex(InputError, "件名"):
@@ -170,11 +169,8 @@ class MailTests(unittest.TestCase):
         items = prepare_mails(contracts, self.settings, self.book)
         self.assertTrue(all("管理番号が重複" in item.issue for item in items))
 
-    def test_review_required_and_repeat_execution_blocked(self):
+    def test_valid_mail_needs_no_review_flag_and_repeat_execution_is_blocked(self):
         item = prepare_mails(self.contracts, self.settings, self.book)[0]
-        with self.assertRaisesRegex(InputError, "確認済み"):
-            item.validate()
-        item.reviewed = True
         item.validate()
         item.status = "下書き保存済み"
         with self.assertRaisesRegex(InputError, "再実行"):

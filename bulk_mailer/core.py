@@ -380,10 +380,9 @@ class MailItem:
     body: str
     issue: str = ""
     included: bool = True
-    reviewed: bool = False
     status: str = "未実行"
 
-    def validate(self) -> None:
+    def validate_content(self) -> None:
         if self.issue:
             raise InputError(self.issue)
         validate_address(self.to)
@@ -394,8 +393,9 @@ class MailItem:
         if _has_unsafe_controls(self.subject):
             raise InputError("件名に制御文字・改行または不可視文字が含まれています。")
         validate_body(self.body)
-        if not self.reviewed:
-            raise InputError("本文と宛先を確認して「確認済みにする」を押してください。")
+
+    def validate(self) -> None:
+        self.validate_content()
         if self.status != "未実行":
             raise InputError("実行済み、または実行結果が未確定のメールは再実行できません。")
 

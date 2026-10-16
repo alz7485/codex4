@@ -150,7 +150,6 @@ def apply_history(items: list[MailItem], mode: str, logs_directory: Path) -> Non
             if status:
                 item.status = f"履歴あり（{status}）"
                 item.included = False
-                item.reviewed = False
 
 
 def execute_batch(items: list[MailItem], mode: str, journal_path: Path,

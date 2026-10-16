@@ -42,7 +42,6 @@ class HistoryIntegrationTests(unittest.TestCase):
         self.assertEqual(self.errors, [])
 
     def save_draft_with_fake_outlook(self):
-        self.app.items[0].reviewed = True
         client = Mock()
         client.create.return_value = "下書き保存済み"
         execute_batch(self.app.items, "draft", self.path / "logs" / "first.jsonl",
@@ -60,7 +59,7 @@ class HistoryIntegrationTests(unittest.TestCase):
         self.assertFalse(self.app.items[0].included)
         self.app.toggle_included()
         self.assertFalse(self.app.items[0].included)
-        self.assertEqual(self.app.metric_vars[1].get(), "0")
+        self.assertIn("作成対象 0件", self.app.summary.get())
 
     def test_restarted_app_excludes_already_created_mail(self):
         self.save_draft_with_fake_outlook()
@@ -76,9 +75,6 @@ class HistoryIntegrationTests(unittest.TestCase):
         self.app.save_config()
         self.assertEqual(self.app.items[0].status, "未実行")
         self.assertTrue(self.app.items[0].included)
-        self.assertFalse(self.app.items[0].reviewed)
-        self.app.review_selected()
-        self.assertTrue(self.app.items[0].reviewed)
 
     def test_corrupt_history_preserves_old_list_and_settings(self):
         previous = self.app.items[0]
