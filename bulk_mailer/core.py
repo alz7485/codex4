@@ -19,7 +19,7 @@ DEFAULT_TEMPLATE = """下記契約の締結作業が完了しましたので、�
 受入先情報:{事業所名} {部署名} {業務名}
 受入開始日:{受入開始日}  受入終了日:{受入終了日}"""
 FIELDS = (
-    "管理番号", "受入開始日", "受入終了日", "事業所名", "部署名",
+    "管理番号", "受入開始日", "受入終了日", "会社名", "事業所名", "部署名",
     "業務名", "チーム名", "氏名", "派遣元", "契約承認状態",
 )
 DATE_RANGE = re.compile(r"(\d{4}/\d{2}/\d{2})\s*-\s*(\d{4}/\d{2}/\d{2})")
@@ -51,6 +51,11 @@ def parse_contracts(text: str) -> list[Contract]:
     if len(text) > MAX_TEXT_CHARACTERS:
         raise InputError("入力テキストが大きすぎます。500万文字以下に分割してください。")
     lines = text.removeprefix("\ufeff").splitlines()
+    # Only EOF truncation of the final record's unused footer is optional.
+    # Removing trailing blank lines makes EOF checks explicit without scanning
+    # the remainder of the input for every record.
+    while lines and not lines[-1].strip():
+        lines.pop()
     position = 0
 
     def fail(message: str) -> None:
@@ -66,20 +71,22 @@ def parse_contracts(text: str) -> list[Contract]:
         position += 1
         return result
 
-    def blanks(required: bool = True) -> None:
+    def blanks(required: bool = True, *, single: bool = False) -> None:
         nonlocal position
         start = position
         while position < len(lines) and not lines[position].strip():
             position += 1
         if required and start == position:
             fail("区切りの空白行がありません。")
+        if single and position - start != 1:
+            fail("必須項目間の空白行は1行にしてください。空欄の項目がないか確認してください。")
 
     blanks(required=False)
     contracts = []
     while position < len(lines):
         start = position + 1
         values = {"管理番号": value("管理番号")}
-        blanks()
+        blanks(single=True)
         dates = value("受入開始日・受入終了日")
         match = DATE_RANGE.fullmatch(dates)
         if not match:
@@ -93,13 +100,17 @@ def parse_contracts(text: str) -> list[Contract]:
                 raise
             fail("存在しない日付です。")
         values.update({"受入開始日": begin, "受入終了日": end})
-        for label in ("事業所名", "部署名", "業務名", "チーム名", "氏名", "派遣元", "契約承認状態"):
-            blanks()
+        for label in ("会社名", "事業所名", "部署名", "業務名", "チーム名", "氏名", "派遣元", "契約承認状態"):
+            blanks(single=True)
             values[label] = value(label)
+        contracts.append(Contract(values, start))
+        if position == len(lines):
+            break
         value("契約承認状態の直後の不要行")
+        if position == len(lines):
+            break
         blanks()
         value("2つ目の不要行")
-        contracts.append(Contract(values, start))
         if position < len(lines):
             blanks()
     if not contracts:

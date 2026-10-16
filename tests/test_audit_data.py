@@ -17,7 +17,7 @@ from bulk_mailer.outlook import execute_batch
 
 def record(number="K-001", name="山田 太郎"):
     return "\n\n".join([
-        number, "2026/11/01 - 2027/03/31", "東京事業所", "開発部", "システム開発",
+        number, "2026/11/01 - 2027/03/31", "サンプル受入株式会社", "東京事業所", "開発部", "システム開発",
         "第一チーム", name, "サンプル派遣株式会社", "承認済み\n不要行1", "不要行2",
     ])
 
@@ -173,7 +173,7 @@ class AdversarialDataTests(unittest.TestCase):
 
     def test_each_missing_required_data_block_is_rejected(self):
         source = record()
-        for block in source.split("\n\n"):
+        for block in source.split("\n\n")[:-1]:
             with self.subTest(block=block), self.assertRaises(InputError):
                 parse_contracts(source.replace(block, "", 1))
 

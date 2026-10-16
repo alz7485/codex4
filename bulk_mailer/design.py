@@ -226,7 +226,7 @@ class Layout:
         ttk.Separator(guide).pack(fill="x", pady=14)
         ttk.Label(guide, text="受入期間の記載例", style="CardMuted.TLabel").pack(anchor="w")
         ttk.Label(guide, text="2026/11/01 - 2027/03/31", style="Card.TLabel").pack(anchor="w", pady=8)
-        ttk.Label(guide, text="項目の間には空白行を入れます。\n先頭の空白行は読み飛ばします。", style="CardMuted.TLabel").pack(anchor="w")
+        ttk.Label(guide, text="必須項目間の空白行は1行です。\n先頭の空白行は読み飛ばします。", style="CardMuted.TLabel").pack(anchor="w")
         controls = ttk.Frame(page, style="Page.TFrame")
         controls.pack(side="bottom", before=body, fill="x", pady=(18, 0))
         ttk.Label(controls, text="リスト作成後に、宛先とメール内容を確認できます。", style="Muted.TLabel").pack(side="left")

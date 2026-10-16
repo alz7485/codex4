@@ -12,7 +12,7 @@ from bulk_mailer.core import (
 
 
 def record(number="K-001", name="山田 太郎", dates="2026/11/01 - 2027/03/31"):
-    return "\n\n".join([number, dates, "東京事業所", "開発部", "システム開発", "第一チーム",
+    return "\n\n".join([number, dates, "サンプル受入株式会社", "東京事業所", "開発部", "システム開発", "第一チーム",
                           name, "サンプル派遣株式会社", "承認済み\n不要行1", "不要行2"])
 
 
@@ -36,9 +36,9 @@ class ParserTests(unittest.TestCase):
         with self.assertRaisesRegex(InputError, "不要行"):
             parse_contracts(source)
 
-    def test_truncated_record_is_rejected(self):
+    def test_missing_last_required_field_is_rejected(self):
         with self.assertRaises(InputError):
-            parse_contracts(record().removesuffix("不要行2"))
+            parse_contracts(record().split("承認済み")[0])
 
     def test_date_validation(self):
         for dates in ("2026/02/30 - 2027/03/31", "2027/11/01 - 2026/03/31", "2026-11-01 - 2027-03-31"):
