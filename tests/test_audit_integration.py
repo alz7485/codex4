@@ -91,7 +91,8 @@ class HistoryIntegrationTests(unittest.TestCase):
         self.app.edit_mail()
         import tkinter as tk
         from tkinter import ttk
-        window = next(child for child in self.app.winfo_children() if isinstance(child, tk.Toplevel))
+        window = next(child for child in self.app.winfo_children()
+                      if isinstance(child, tk.Toplevel) and child.title().startswith("メールを編集"))
 
         def descendants(widget):
             for child in widget.winfo_children():

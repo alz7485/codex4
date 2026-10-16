@@ -57,7 +57,8 @@ class AuditUsageTests(unittest.TestCase):
 
     def edit_controls(self):
         self.app.edit_mail()
-        window = next(widget for widget in self.app.winfo_children() if isinstance(widget, tk.Toplevel))
+        window = next(widget for widget in self.app.winfo_children()
+                      if isinstance(widget, tk.Toplevel) and widget.title().startswith("メールを編集"))
 
         def descendants(widget):
             for child in widget.winfo_children():

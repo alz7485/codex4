@@ -19,6 +19,7 @@ from .core import (
 )
 from .outlook import apply_history, execute_batch
 from .design import Layout
+from .grid_table import GridRow
 
 
 def readonly_text(widget: tk.Text, value: str) -> None:
@@ -264,17 +265,30 @@ class Application(Layout, TkinterDnD.Tk):
     def refresh_table(self) -> None:
         selected = self.table.selection()
         scroll_y, scroll_x = self.table.yview(), self.table.xview()
-        self.table.delete(*self.table.get_children())
+        common_cc = parse_cc(self.settings.cc)
+        rows = []
         for index, item in enumerate(self.items):
             values = item.contract.values
             problem = self.mail_problem(item)
-            status = item.status
-            if item.status == "未実行":
-                status = problem or "作成待ち"
-            tags = ("error",) if problem else ()
-            self.table.insert("", "end", iid=str(index), values=(
-                "✓" if item.included else "—", values["管理番号"],
-                values["氏名"], item.to, status), tags=tags)
+            state = "要修正" if problem else {
+                "未実行": "作成待ち", "下書き保存済み": "下書き済", "送信要求済み": "送信要求済",
+            }.get(item.status, "処理済み")
+            if item.status.startswith("履歴あり"):
+                state = "要確認" if problem else "履歴あり"
+            elif item.status == "実行中":
+                state = "実行中"
+            address_line = item.to or "宛先未登録"
+            if item.cc != common_cc:
+                address_line += "  CC：" + ("; ".join(item.cc) or "なし")
+            rows.append(GridRow(str(index), (
+                ("✓ 対象" if item.included else "— 除外") + "\n" + state,
+                values["管理番号"] + "\n" + values["契約承認状態"],
+                values["氏名"] + "（" + values["派遣元"] + "）\n" + address_line,
+                "開始：" + values["受入開始日"] + "\n終了：" + values["受入終了日"],
+                values["会社名"] + " / " + values["事業所名"] + "\n" +
+                " / ".join(values[key] for key in ("部署名", "業務名", "チーム名")),
+            ), problem, item.status))
+        self.table.set_rows(rows)
         if selected and int(selected[0]) < len(self.items):
             self.table.selection_set(selected[0])
         if scroll_y:
@@ -284,6 +298,7 @@ class Application(Layout, TkinterDnD.Tk):
         pending = [item for item in self.items if item.included and item.status == "未実行"]
         issues = sum(bool(self.mail_problem(item)) for item in pending)
         self.summary.set(f"全 {len(self.items)}件  ·  作成対象 {len(pending)}件" + (f"  ·  要修正 {issues}件" if issues else ""))
+        self.list_subject.set("件名：" + (self.settings.subject or "未設定") + "    CC：" + ("; ".join(common_cc) or "なし"))
         self.show_preview()
 
     def show_preview(self) -> None:

@@ -6,6 +6,7 @@ from tkinter import font as tkfont, ttk
 from tkinter.scrolledtext import ScrolledText
 
 from .core import FIELDS
+from .grid_table import ContractTable
 
 BG = "#f3f5f9"
 WHITE = "#ffffff"
@@ -236,21 +237,22 @@ class Layout:
         page = self.review_page
         self.heading(page, "作成対象を確認", "一覧で全件の宛先・本文を確認してから、下書き保存・送信します。問題がある行だけ色で表示します。")
 
-        panes = ttk.Panedwindow(page, orient="horizontal")
+        panes = self.review_panes = ttk.Panedwindow(page, orient="vertical")
         panes.pack(fill="both", expand=True)
-        panes.bind("<Map>", lambda _: self.after_idle(lambda: panes.sashpos(0, int(panes.winfo_width() * .54))))
         list_card = card(panes, 14)
         panes.add(list_card, weight=6)
         bar = ttk.Frame(list_card, style="Surface.TFrame")
         bar.pack(fill="x", pady=(0, 14))
         ttk.Label(bar, text="対象一覧", style="CardTitle.TLabel").pack(side="left")
+        self.list_subject = tk.StringVar(value="件名・CCは設定画面で登録します。")
+        common_label = ttk.Label(list_card, textvariable=self.list_subject, style="CardMuted.TLabel", wraplength=1000)
+        common_label.pack(anchor="w", pady=(0, 12))
+        list_card.bind("<Configure>", lambda event: (
+            common_label.configure(wraplength=max(200, event.width - 30)),
+            issue_label.configure(wraplength=max(200, event.width - 30))))
         table_frame = ttk.Frame(list_card, style="Surface.TFrame")
         table_frame.pack(fill="both", expand=True)
-        columns = ("included", "id", "name", "to", "status")
-        self.table = ttk.Treeview(table_frame, columns=columns, show="headings", selectmode="browse", height=8)
-        for column, heading, width in zip(columns, ("対象", "管理番号", "氏名", "To", "状態・問題"), (44, 83, 100, 175, 160)):
-            self.table.heading(column, text=heading)
-            self.table.column(column, width=width, minwidth=40, stretch=column == "to", anchor="center" if column == "included" else "w")
+        self.table = ContractTable(table_frame, family=self.ui_font)
         vertical = ttk.Scrollbar(table_frame, orient="vertical", command=self.table.yview)
         horizontal = ttk.Scrollbar(table_frame, orient="horizontal", command=self.table.xview)
         self.table.configure(yscrollcommand=vertical.set, xscrollcommand=horizontal.set)
@@ -259,7 +261,6 @@ class Layout:
         horizontal.grid(row=1, column=0, sticky="ew")
         table_frame.rowconfigure(0, weight=1)
         table_frame.columnconfigure(0, weight=1)
-        self.table.tag_configure("error", foreground="#b66a16", background="#fff8ee")
         self.table.bind("<<TreeviewSelect>>", lambda _: self.show_preview())
         self.table.bind("<Double-1>", lambda _: self.edit_mail())
         self.table.bind("<space>", lambda _: self.toggle_included())
@@ -268,9 +269,19 @@ class Layout:
         tools.pack(side="bottom", before=table_frame, fill="x", pady=(14, 0))
         for title, command in (("対象／除外", self.toggle_included), ("宛先・本文を編集", self.edit_mail)):
             ttk.Button(tools, text=title, command=command).pack(side="left", padx=(0, 7))
+        self.details_button = ttk.Button(tools, text="本文・取り込み情報を表示", command=self.toggle_details)
+        self.details_button.pack(side="right")
 
-        preview_card = card(panes, 18)
-        panes.add(preview_card, weight=5)
+        self.details_window = tk.Toplevel(self)
+        self.details_window.withdraw()
+        self.details_window.title("メール本文・取り込み情報")
+        self.details_window.geometry("1000x720")
+        self.details_window.minsize(760, 600)
+        self.details_window.transient(self)
+        self.details_window.protocol("WM_DELETE_WINDOW", self.toggle_details)
+        preview_card = self.preview_card = card(self.details_window, 18)
+        preview_card.pack(fill="both", expand=True)
+        self.details_visible = False
         ttk.Label(preview_card, text="メールプレビュー", style="CardTitle.TLabel").pack(anchor="w")
         self.preview_person = tk.StringVar(value="一覧からメールを選択")
         ttk.Label(preview_card, textvariable=self.preview_person, style="CardMuted.TLabel").pack(anchor="w", pady=(5, 18))
@@ -299,12 +310,11 @@ class Layout:
         self.record_preview = self.text_box(data_frame, wrap="word", width=20, height=10, state="disabled")
         self.record_preview.pack(fill="both", expand=True, pady=(12, 0))
         self.preview_issue = tk.StringVar(value="")
-        issue_label = ttk.Label(preview_card, textvariable=self.preview_issue, style="CardMuted.TLabel", wraplength=470)
-        issue_label.pack(side="bottom", before=preview_tabs, anchor="w", pady=(12, 0))
+        issue_label = ttk.Label(list_card, textvariable=self.preview_issue, style="CardMuted.TLabel", wraplength=1000)
+        issue_label.pack(side="bottom", before=table_frame, anchor="w", pady=(8, 0))
 
         def resize_preview(event):
             subject_label.configure(wraplength=max(180, event.width - 40))
-            issue_label.configure(wraplength=max(180, event.width - 40))
             for label in meta_labels:
                 label.configure(wraplength=max(150, event.width - 95))
 
@@ -316,6 +326,15 @@ class Layout:
         ttk.Label(actionbar, textvariable=self.summary, style="Muted.TLabel").pack(side="left")
         self.execute_button = ttk.Button(actionbar, text="下書きを保存  →", style="Primary.TButton", command=self.execute)
         self.execute_button.pack(side="right")
+
+    def toggle_details(self):
+        if self.details_visible:
+            self.details_window.withdraw()
+        else:
+            self.details_window.deiconify()
+            self.details_window.lift()
+        self.details_visible = not self.details_visible
+        self.details_button.configure(text="詳細を閉じる" if self.details_visible else "本文・取り込み情報を表示")
 
     def build_settings(self):
         page = self.settings_page

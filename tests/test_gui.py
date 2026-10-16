@@ -34,8 +34,15 @@ class GuiTests(unittest.TestCase):
         self.assertEqual(self.app.preview_subject.get(), "共通の件名")
         self.assertIn("山田 太郎", self.app.preview.get("1.0", "end"))
         self.assertIn("第一チーム", self.app.record_preview.get("1.0", "end"))
-        self.assertEqual(tuple(self.app.table.cget("columns")), ("included", "id", "name", "to", "status"))
-        self.assertEqual(self.app.table.set("0", "status"), "作成待ち")
+        self.assertEqual(self.app.table.columns, ("included", "id", "worker", "period", "receiver"))
+        self.assertIn("作成待ち", self.app.table.set("0", "included"))
+        values = self.app.items[0].contract.values
+        displayed = "\n".join(self.app.table.item("0", "values"))
+        for value in values.values():
+            self.assertIn(value, displayed)
+        self.assertIn("yamada@example.com", displayed)
+        self.assertTrue(all(value.count("\n") == 1 for value in self.app.table.item("0", "values")))
+        self.assertFalse(self.app.details_visible)
         self.assertEqual(tuple(self.app.table.item("0", "tags")), ())
 
     def test_exclusion_updates_compact_summary_without_coloring_valid_row(self):
@@ -59,11 +66,11 @@ class GuiTests(unittest.TestCase):
         self.app.refresh_table()
         self.assertEqual(tuple(self.app.table.item("0", "tags")), ())
         self.assertEqual(tuple(self.app.table.item("1", "tags")), ("error",))
-        self.assertIn("宛先未登録", self.app.table.set("1", "status"))
+        self.assertIn("宛先未登録", self.app.table.set("1", "worker"))
         self.app.items[1].to, self.app.items[1].issue = "fixed@example.com", ""
         self.app.refresh_table()
         self.assertEqual(tuple(self.app.table.item("1", "tags")), ())
-        self.assertEqual(self.app.table.set("1", "status"), "作成待ち")
+        self.assertIn("作成待ち", self.app.table.set("1", "included"))
         self.app.items[0].status = "下書き保存済み"
         self.app.refresh_table()
         self.assertEqual(tuple(self.app.table.item("0", "tags")), ())
@@ -75,7 +82,7 @@ class GuiTests(unittest.TestCase):
         self.app.subject_var.set("")
         self.app.save_config()
         self.assertEqual(tuple(self.app.table.item("0", "tags")), ("error",))
-        self.assertIn("件名", self.app.table.set("0", "status"))
+        self.assertIn("件名", self.app.table.rows[0].problem)
         self.assertIn("件名", self.app.preview_issue.get())
         self.app.subject_var.set("設定済み件名")
         self.app.save_config()
@@ -107,6 +114,63 @@ class GuiTests(unittest.TestCase):
         self.app.template_input.mark_set("insert", "end-1c")
         self.app.insert_field("チーム名")
         self.assertTrue(self.app.template_input.get("1.0", "end-1c").endswith("{チーム名}"))
+
+    def test_long_two_line_cells_are_not_truncated_and_have_grid_borders(self):
+        table = self.app.table
+        values = self.app.items[0].contract.values
+        values["派遣元"] = "長い名称の派遣元株式会社" * 20
+        values["業務名"] = "詳細な業務名\t追加説明" * 20
+        self.app.items[0].cc = ("individual@example.com",)
+        self.app.refresh_table()
+        self.app.update()
+        self.assertIn(values["派遣元"], table.set("0", "worker"))
+        self.assertIn("individual@example.com", table.set("0", "worker"))
+        texts = table.find_withtag("cell_text")
+        self.assertEqual(len(texts), 5)
+        borders = table.find_withtag("cell")
+        self.assertEqual(len(borders), 5)
+        x = 0
+        for text, border, width in zip(texts, borders, table.display_widths()):
+            left, top, right, bottom = table.bbox(text)
+            self.assertGreaterEqual(left, x)
+            self.assertLessEqual(right, x + width)
+            self.assertLessEqual(bottom - top, table.row_height)
+            self.assertEqual(table.itemcget(border, "outline"), "#c6cfdb")
+            self.assertEqual(table.itemcget(text, "text").count("\n"), 1)
+            x += width
+        self.assertLess(table.xview()[1], 1.0)
+
+    def test_grid_selection_and_target_toggle_work_on_either_line(self):
+        table = self.app.table
+        for offset in (16, table.row_height - 8):
+            before = self.app.items[0].included
+            table.event_generate("<ButtonPress-1>", x=20, y=table.header_height + offset)
+            table.event_generate("<ButtonRelease-1>", x=20, y=table.header_height + offset)
+            self.app.update()
+            self.assertEqual(self.app.items[0].included, not before)
+        before = self.app.items[0].included
+        table.event_generate("<ButtonRelease-1>", x=20, y=10)
+        self.assertEqual(self.app.items[0].included, before)
+        self.assertEqual(table.selection(), ("0",))
+
+    def test_large_grid_scrolls_to_last_record_and_keeps_header_visible(self):
+        from bulk_mailer.grid_table import GridRow
+        table = self.app.table
+        prototype = table.rows[0].values
+        table.set_rows([GridRow(str(index), prototype) for index in range(1000)])
+        self.app.update()
+        table.select_position(999)
+        self.app.update()
+        self.assertEqual(table.selection(), ("999",))
+        self.assertLess(len(table.find_withtag("cell_text")), 100)
+        visible_ids = set(table.gettags(item)[1] for item in table.find_withtag("cell_text"))
+        self.assertIn("999", visible_ids)
+        header = table.bbox("header")
+        self.assertLessEqual(abs(header[1] - table.canvasy(0)), 1)
+        self.assertEqual(table.identify_row(10), "")
+        table.select_position(0)
+        self.assertEqual(table.selection(), ("0",))
+        self.assertLess(table.yview()[0], .001)
 
 
 if __name__ == "__main__":

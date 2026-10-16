@@ -165,6 +165,7 @@ class FileDropTests(unittest.TestCase):
     def test_preview_tabs_keep_bounds_and_content_size_when_selected(self):
         self.app.source.insert("1.0", record())
         self.app.create_list()
+        self.app.toggle_details()
         tabs = self.app.preview_tabs
 
         def rectangles():
