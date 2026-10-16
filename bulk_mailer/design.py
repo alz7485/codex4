@@ -1,5 +1,6 @@
 """Visual layout shared by the Windows application and the screenshot preview."""
 from pathlib import Path
+import re
 import tkinter as tk
 from tkinter import font as tkfont, ttk
 from tkinter.scrolledtext import ScrolledText
@@ -13,6 +14,7 @@ MUTED = "#758197"
 LINE = "#e4e9f1"
 BLUE = "#2867e8"
 NAV = "#17263e"
+TEMPLATE_PARTS = re.compile(r"{{|}}|{([^{}\r\n]*)}")
 
 
 class PageStack(ttk.Frame):
@@ -380,6 +382,10 @@ class Layout:
         ttk.Button(head, text="初期値に戻す", command=self.reset_template).pack(side="right")
         self.template_input = self.text_box(right, height=8, width=20, wrap="word", undo=True)
         self.template_input.insert("1.0", self.settings.template)
+        self.template_input.tag_configure("template_field", foreground="#1e54ba", background="#edf3ff")
+        self.template_input.tag_raise("sel")
+        self.template_input.bind("<<Modified>>", self.highlight_template_fields)
+        self.highlight_template_fields()
         self.template_input.pack(fill="both", expand=True)
         ttk.Separator(right).pack(fill="x", pady=(14, 12))
         ttk.Label(right, text="差し込み項目を挿入", style="CardMuted.TLabel").pack(anchor="w", pady=(0, 10))
@@ -396,6 +402,19 @@ class Layout:
         if not self.busy:
             self.template_input.insert("insert", "{" + name + "}")
             self.template_input.focus_set()
+
+    def highlight_template_fields(self, event=None):
+        text = self.template_input
+        if event is not None and not text.edit_modified():
+            return
+        text.edit_modified(False)
+        value = text.get("1.0", "end-1c")
+        text.tag_remove("template_field", "1.0", "end")
+        # Consume escaped braces before looking for actual substitution fields.
+        for match in TEMPLATE_PARTS.finditer(value):
+            name = match.group(1)
+            if name is not None and name.removesuffix(":") in FIELDS:
+                text.tag_add("template_field", f"1.0+{match.start()}c", f"1.0+{match.end()}c")
 
     def on_table_click(self, event):
         if self.busy:
