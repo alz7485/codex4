@@ -9,6 +9,7 @@ from datetime import datetime
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 from tkinter.scrolledtext import ScrolledText
+from tkinterdnd2 import COPY, DND_FILES, REFUSE_DROP, TkinterDnD
 from uuid import uuid4
 
 from .core import (
@@ -27,7 +28,7 @@ def readonly_text(widget: tk.Text, value: str) -> None:
     widget.configure(state="disabled")
 
 
-class Application(Layout, tk.Tk):
+class Application(Layout, TkinterDnD.Tk):
     def __init__(self, data_dir: Path | None = None, *, preview_mode: bool = False) -> None:
         super().__init__()
         self.title("Mail Desk — 契約通知メール作成")
@@ -53,6 +54,7 @@ class Application(Layout, tk.Tk):
         self.events: queue.Queue = queue.Queue()
         self.protocol("WM_DELETE_WINDOW", self.close_app)
         self.build_shell()
+        self.register_file_drops(self)
         self.update_mode_label()
         if self.contacts_path.exists() or self.settings.address_book_path:
             try:
@@ -84,23 +86,57 @@ class Application(Layout, tk.Tk):
         names = ["".join(contact.name.split()) for contact in self.book.contacts]
         self.contact_info.set(f"{len(names)}件をJSON保存済み（設定を保存して一覧に反映）")
 
-    def import_contacts(self) -> None:
+    def register_file_drops(self, widget: tk.Misc) -> None:
+        """Accept files even when the pointer is over a child control."""
+        widget.drop_target_register(DND_FILES)
+        widget.dnd_bind("<<DropEnter>>", self.allow_file_drop)
+        widget.dnd_bind("<<DropPosition>>", self.allow_file_drop)
+        widget.dnd_bind("<<Drop>>", self.on_file_drop)
+        for child in widget.winfo_children():
+            self.register_file_drops(child)
+
+    def allow_file_drop(self, event) -> str:
+        # File names are supplied only at Drop, not at DropEnter/DropPosition.
+        return REFUSE_DROP if self.busy else COPY
+
+    def on_file_drop(self, event) -> str:
         if self.busy:
-            return
-        path = filedialog.askopenfilename(parent=self, title="氏名・メールアドレスの対応表", filetypes=[("Excel", "*.xlsx")])
+            return REFUSE_DROP
+        try:
+            paths = self.tk.splitlist(event.data)
+        except (tk.TclError, TypeError):
+            paths = ()
+        if len(paths) != 1:
+            messagebox.showwarning("ファイルの取り込み", "txtまたはExcel（.xlsx）を1ファイルずつドロップしてください。", parent=self)
+            return REFUSE_DROP
+        path = Path(paths[0])
+        if path.suffix.lower() not in {".txt", ".xlsx"} or not path.is_file():
+            messagebox.showwarning("ファイルの取り込み", "読み込めるファイルはtxtとExcel（.xlsx）です。フォルダーは読み込めません。", parent=self)
+            return REFUSE_DROP
+        success = self.load_text(path) if path.suffix.lower() == ".txt" else self.import_contacts(path)
+        return COPY if success else REFUSE_DROP
+
+    def import_contacts(self, path: str | Path | None = None) -> bool:
+        if self.busy:
+            return False
+        if path is None:
+            path = filedialog.askopenfilename(parent=self, title="氏名・メールアドレスの対応表", filetypes=[("Excel", "*.xlsx")])
         if not path:
-            return
+            return False
+        path = str(path)
         try:
             book = read_address_book(path)
             save_contacts(book, self.contacts_path, path)
         except (InputError, OSError) as error:
             messagebox.showerror("宛先の読み込み・保存エラー", str(error), parent=self)
-            return
+            return False
         self.book = book
         self.contacts_dirty = True
         self.path_var.set(path)
         self.refresh_contacts()
         self.status.set("宛先JSONを全件置換しました。設定を保存して一覧へ反映してください。")
+        self.notebook.select(self.settings_page)
+        return True
 
     def show_contacts(self) -> None:
         if self.busy:
@@ -163,23 +199,26 @@ class Application(Layout, tk.Tk):
         self.update_mode_label()
         self.status.set("設定を保存しました。" + ("未実行メールの内容を更新しました。" if self.items else ""))
 
-    def load_text(self) -> None:
+    def load_text(self, path: str | Path | None = None) -> bool:
         if self.busy:
-            return
-        path = filedialog.askopenfilename(parent=self, title="入力テキスト", filetypes=[("テキスト", "*.txt"), ("すべて", "*.*")])
+            return False
+        if path is None:
+            path = filedialog.askopenfilename(parent=self, title="入力テキスト", filetypes=[("テキスト", "*.txt"), ("すべて", "*.*")])
         if not path:
-            return
+            return False
         try:
             text = read_text_file(path)
         except (InputError, OSError) as error:
             messagebox.showerror("txt読込エラー", str(error), parent=self)
-            return
+            return False
         if self.source.get("1.0", "end-1c").strip() and not messagebox.askyesno("入力を置き換え", "現在の入力テキストを置き換えますか？", parent=self):
-            return
+            return False
         self.source.delete("1.0", "end")
         self.source.insert("1.0", text)
         self.source_info.set(f"{Path(path).name}  ·  {len(text.splitlines())}行")
         self.status.set(f"読み込み済み: {Path(path).name}。リスト作成後に内容を確認してください。")
+        self.notebook.select(self.input_page)
+        return True
 
     def create_list(self) -> None:
         if self.busy:

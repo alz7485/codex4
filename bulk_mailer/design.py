@@ -111,7 +111,9 @@ class Layout:
                         arrowcolor=MUTED, arrowsize=12)
         style.configure("TNotebook", background=WHITE, borderwidth=0, tabmargins=0)
         style.configure("TNotebook.Tab", background=WHITE, foreground=MUTED, padding=(16, 10), borderwidth=0)
-        style.map("TNotebook.Tab", background=[("selected", "#edf3ff")], foreground=[("selected", BLUE)])
+        # Clam's inherited selected padding overrides configure(), changing tab size.
+        style.map("TNotebook.Tab", background=[("selected", "#edf3ff")], foreground=[("selected", BLUE)],
+                  padding=[("selected", (16, 10)), ("!selected", (16, 10))])
         style.configure("Horizontal.TProgressbar", background=BLUE, troughcolor="#e8edf5", borderwidth=0)
         self.configure(background=BG)
         image_path = Path(__file__).parent / "assets" / "maildesk.png"
@@ -213,7 +215,7 @@ class Layout:
         ttk.Button(bar, text="txtファイルを開く", command=self.load_text).pack(side="right")
         self.source = self.text_box(editor, wrap="none", undo=True, width=20, height=15)
         self.source.pack(fill="both", expand=True)
-        self.source_info = tk.StringVar(value="この欄にコピーしたテキストを貼り付けてください。")
+        self.source_info = tk.StringVar(value="テキストを貼り付けるか、txtをここにドラッグ＆ドロップしてください。")
         ttk.Label(editor, textvariable=self.source_info, style="CardMuted.TLabel").pack(anchor="w", pady=(12, 0))
         guide = card(body, 22)
         guide.grid(row=0, column=1, sticky="ns")
@@ -305,7 +307,7 @@ class Layout:
         self.preview_subject = tk.StringVar(value="件名は設定で登録できます")
         subject_label = ttk.Label(preview_card, textvariable=self.preview_subject, style="Subject.TLabel", wraplength=470)
         subject_label.pack(anchor="w", pady=(0, 12))
-        preview_tabs = ttk.Notebook(preview_card)
+        self.preview_tabs = preview_tabs = ttk.Notebook(preview_card)
         preview_tabs.pack(fill="both", expand=True)
         body_frame, data_frame = ttk.Frame(preview_tabs, style="Surface.TFrame"), ttk.Frame(preview_tabs, style="Surface.TFrame")
         preview_tabs.add(body_frame, text="メール本文")
@@ -363,7 +365,7 @@ class Layout:
         ttk.Separator(left).pack(fill="x", pady=14)
         ttk.Label(left, text="宛先の対応表", style="CardTitle.TLabel").pack(anchor="w", pady=(0, 9))
         ttk.Entry(left, textvariable=self.path_var, state="readonly").pack(fill="x", pady=(0, 8))
-        ttk.Label(left, text="A列「氏名」・B列「メールアドレス」、1行目は見出し。\n読込後はJSONに保存し、再読込で全件置換します。", style="CardMuted.TLabel", wraplength=430).pack(anchor="w", pady=(0, 10))
+        ttk.Label(left, text="A列「氏名」・B列「メールアドレス」、1行目は見出し。\n.xlsxはドロップでも読込可。JSON保存・再読込で全件置換。", style="CardMuted.TLabel", wraplength=430).pack(anchor="w", pady=(0, 10))
         self.contact_info = tk.StringVar(value="未登録：宛先Excelを読み込んでください。")
         ttk.Label(left, textvariable=self.contact_info, style="CardMuted.TLabel", wraplength=430).pack(anchor="w")
         controls = ttk.Frame(left, style="Surface.TFrame")
