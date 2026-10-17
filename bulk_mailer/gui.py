@@ -242,7 +242,8 @@ class Application(Layout, TkinterDnD.Tk):
         self.source_snapshot = source
         self.refresh_table()
         self.notebook.select(self.review_page)
-        self.table.selection_set("0")
+        self.table.xview_moveto(0)
+        self.table.select_position(0)
         self.status.set(f"{len(items)}件を取り込みました。宛先と本文を確認してください。")
 
     def selected_item(self) -> MailItem | None:

@@ -117,7 +117,12 @@ def _read_history(directory: Path) -> dict[tuple[str, str], str]:
         # iterdir propagates access errors; glob can silently skip unreadable dirs.
         for path in sorted(path for path in Path(directory).iterdir() if path.suffix.lower() == ".jsonl"):
             current = {}
-            for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            # Only LF separates JSONL records. Unicode line separators can occur
+            # inside an external error's JSON string and must remain literal.
+            lines = path.read_text(encoding="utf-8").split("\n")
+            if lines[-1] == "":
+                lines.pop()
+            for line_number, line in enumerate(lines, 1):
                 try:
                     row = json.loads(line)
                     if not isinstance(row, dict):
@@ -129,7 +134,7 @@ def _read_history(directory: Path) -> dict[tuple[str, str], str]:
                             or status == "送信要求済み" and mode != "send"):
                         raise ValueError("管理番号・実行方法・処理状態が不正です。")
                     current[number, mode] = status if status in ("下書き保存済み", "送信要求済み") else "要確認"
-                except (ValueError, TypeError) as error:
+                except (ValueError, TypeError, RecursionError) as error:
                     raise InputError(f"処理記録が壊れています: {path} ({line_number}行目)\n{error}\n"
                                      "Outlookと処理記録を確認してください。") from error
             for key, status in current.items():

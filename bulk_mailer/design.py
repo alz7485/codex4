@@ -416,10 +416,9 @@ class Layout:
                 text.tag_add("template_field", f"1.0+{match.start()}c", f"1.0+{match.end()}c")
 
     def on_table_click(self, event):
+        row = self.table.released_target(event)
         if self.busy:
             return
-        if self.table.identify_region(event.x, event.y) == "cell" and self.table.identify_column(event.x) == "#1":
-            row = self.table.identify_row(event.y)
-            if row:
-                self.table.selection_set(row)
-                self.toggle_included()
+        if row:
+            self.table.selection_set(row)
+            self.toggle_included()

@@ -1,8 +1,10 @@
 {
-  "tests": 142,
+  "tests": 171,
   "failures": 0,
   "errors": 0,
   "skipped": 0,
   "success": true,
-  "platform": "Linux, Python 3.13, Tk 8.6 + TkDND 2.9.5 + Xvfb; Outlook mocked"
+  "platform": "Linux, Python 3.13, Tk 8.6 + TkDND 2.9.5 + Xvfb; Outlook mocked",
+  "audit_date": "2026-10-17",
+  "independent_agents": 3
 }

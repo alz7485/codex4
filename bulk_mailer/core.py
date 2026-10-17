@@ -293,7 +293,7 @@ def load_settings(path: Path) -> Settings:
             raise ValueError("設定値は文字列である必要があります。")
         settings.validate()
         return settings
-    except (ValueError, TypeError, OSError) as error:
+    except (ValueError, TypeError, OSError, RecursionError) as error:
         raise InputError(f"設定ファイルを読み込めません: {path}\n{error}") from error
 
 
@@ -367,7 +367,7 @@ def load_contacts(path: Path) -> tuple[AddressBook, str]:
         if len(data) > MAX_CONTACTS_JSON_BYTES:
             raise InputError("宛先JSONが大きすぎます。Excelを分割して読み込み直してください。")
         return _parse_contacts_payload(json.loads(data.decode("utf-8")))
-    except (ValueError, TypeError, OSError) as error:
+    except (ValueError, TypeError, OSError, RecursionError) as error:
         raise InputError(f"宛先JSONを読み込めません: {path}\n{error}") from error
 
 

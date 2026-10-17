@@ -28,9 +28,11 @@ class ContractTable(tk.Canvas):
         self.rows: list[GridRow] = []
         self._by_id: dict[str, GridRow] = {}
         self._selected: tuple[str, ...] = ()
+        self._pressed_target: tuple[str, int, int] | None = None
         self.widths = [68, 128, 310, 160, 330]
         self.bind("<Configure>", lambda _: self.redraw())
         self.bind("<Button-1>", self.select_at)
+        self.bind("<B1-Motion>", self.track_drag)
         self.bind("<Up>", lambda _: self.move_selection(-1))
         self.bind("<Down>", lambda _: self.move_selection(1))
         self.bind("<Home>", lambda _: self.select_position(0))
@@ -43,6 +45,7 @@ class ContractTable(tk.Canvas):
         self.configure(yscrollincrement=self.row_height)
 
     def set_rows(self, rows: list[GridRow]) -> None:
+        self._pressed_target = None
         self.rows = rows
         self._by_id = {row.iid: row for row in rows}
         self._selected = tuple(iid for iid in self._selected if iid in self._by_id)
@@ -95,10 +98,27 @@ class ContractTable(tk.Canvas):
         return self.select_position(max(0, position + step))
 
     def select_at(self, event) -> None:
+        self._pressed_target = None
         self.focus_set()
         iid = self.identify_row(event.y)
         if iid:
+            if self.identify_column(event.x) == "#1":
+                self._pressed_target = (iid, event.x, event.y)
             self.selection_set(iid)
+
+    def track_drag(self, event) -> None:
+        if self._pressed_target is not None:
+            _, x, y = self._pressed_target
+            if abs(event.x - x) > 6 or abs(event.y - y) > 6:
+                self._pressed_target = None
+
+    def released_target(self, event) -> str:
+        pressed, self._pressed_target = self._pressed_target, None
+        if (pressed is not None and self.identify_column(event.x) == "#1"
+                and self.identify_row(event.y) == pressed[0]
+                and abs(event.x - pressed[1]) <= 6 and abs(event.y - pressed[2]) <= 6):
+            return pressed[0]
+        return ""
 
     def identify_row(self, y: int) -> str:
         if y < self.header_height:
