@@ -16,6 +16,7 @@ class GridRow:
 class ContractTable(tk.Canvas):
     columns = ("included", "id", "worker", "period", "receiver")
     headings = ("対象", "管理番号／承認状態", "氏名・派遣元／メールアドレス", "受入開始・終了", "受入先情報")
+    minimum_widths = (68, 128, 310, 160, 330)
 
     def __init__(self, parent, *, family: str):
         super().__init__(parent, background="white", highlightthickness=1,
@@ -29,7 +30,7 @@ class ContractTable(tk.Canvas):
         self._by_id: dict[str, GridRow] = {}
         self._selected: tuple[str, ...] = ()
         self._pressed_target: tuple[str, int, int] | None = None
-        self.widths = [68, 128, 310, 160, 330]
+        self.widths = list(self.minimum_widths)
         self.bind("<Configure>", lambda _: self.redraw())
         self.bind("<Button-1>", self.select_at)
         self.bind("<B1-Motion>", self.track_drag)
@@ -49,7 +50,7 @@ class ContractTable(tk.Canvas):
         self.rows = rows
         self._by_id = {row.iid: row for row in rows}
         self._selected = tuple(iid for iid in self._selected if iid in self._by_id)
-        widths = [68, 128, 310, 160, 330]
+        widths = list(self.minimum_widths)
         for index, heading in enumerate(self.headings):
             widths[index] = max(widths[index], self.header_font.measure(heading) + 28)
         for row in rows:
@@ -197,3 +198,14 @@ class ContractTable(tk.Canvas):
             self.create_text(x + 14, top + 12, text=heading, font=self.header_font,
                              fill="#53627b", anchor="nw", tags="header")
             x += cell_width
+
+
+class EmployeeTable(ContractTable):
+    columns = ("staff_id", "employee_id", "name", "email")
+    headings = ("スタッフID", "社員ID（派遣元スタッフコード）", "氏名", "メールアドレス")
+    minimum_widths = (140, 240, 180, 320)
+
+    def display_widths(self) -> list[int]:
+        widths = self.widths.copy()
+        widths[-1] += max(0, self.winfo_width() - 2 - sum(widths))
+        return widths

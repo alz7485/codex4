@@ -19,7 +19,7 @@ from .core import (
 )
 from .outlook import apply_history, execute_batch
 from .design import Layout
-from .grid_table import GridRow
+from .grid_table import EmployeeTable, GridRow
 
 
 def readonly_text(widget: tk.Text, value: str) -> None:
@@ -68,11 +68,11 @@ class Application(Layout, TkinterDnD.Tk):
                     imported = read_address_book(self.settings.address_book_path)
                     save_contacts(imported, self.contacts_path, self.settings.address_book_path)
                     self.book = imported
-                self.contact_info.set(f"{len(self.book.contacts)}件の宛先をJSONから復元済み")
+                self.contact_info.set(f"{len(self.book.contacts)}件の社員情報をJSONから復元済み")
             except (InputError, OSError) as error:
                 initial_error += "\n" + str(error)
         if initial_error:
-            self.after(100, lambda: messagebox.showwarning("設定・宛先表の確認", initial_error.strip(), parent=self))
+            self.after(100, lambda: messagebox.showwarning("設定・社員情報の確認", initial_error.strip(), parent=self))
         self.poll_job = self.after(150, self.poll_events)
 
     def update_mode_label(self) -> None:
@@ -108,11 +108,11 @@ class Application(Layout, TkinterDnD.Tk):
         except (tk.TclError, TypeError):
             paths = ()
         if len(paths) != 1:
-            messagebox.showwarning("ファイルの取り込み", "txtまたはExcel（.xlsx）を1ファイルずつドロップしてください。", parent=self)
+            messagebox.showwarning("ファイルの取り込み", "txtまたは社員情報CSVを1ファイルずつドロップしてください。", parent=self)
             return REFUSE_DROP
         path = Path(paths[0])
-        if path.suffix.lower() not in {".txt", ".xlsx"} or not path.is_file():
-            messagebox.showwarning("ファイルの取り込み", "読み込めるファイルはtxtとExcel（.xlsx）です。フォルダーは読み込めません。", parent=self)
+        if path.suffix.lower() not in {".txt", ".csv", ".xlsx"} or not path.is_file():
+            messagebox.showwarning("ファイルの取り込み", "読み込めるファイルはtxt・社員情報CSV・旧版のExcel（.xlsx）です。フォルダーは読み込めません。", parent=self)
             return REFUSE_DROP
         success = self.load_text(path) if path.suffix.lower() == ".txt" else self.import_contacts(path)
         return COPY if success else REFUSE_DROP
@@ -121,7 +121,7 @@ class Application(Layout, TkinterDnD.Tk):
         if self.busy:
             return False
         if path is None:
-            path = filedialog.askopenfilename(parent=self, title="氏名・メールアドレスの対応表", filetypes=[("Excel", "*.xlsx")])
+            path = filedialog.askopenfilename(parent=self, title="社員情報CSV", filetypes=[("社員情報CSV", "*.csv"), ("旧版の宛先Excel", "*.xlsx")])
         if not path:
             return False
         path = str(path)
@@ -129,13 +129,13 @@ class Application(Layout, TkinterDnD.Tk):
             book = read_address_book(path)
             save_contacts(book, self.contacts_path, path)
         except (InputError, OSError) as error:
-            messagebox.showerror("宛先の読み込み・保存エラー", str(error), parent=self)
+            messagebox.showerror("社員情報の読み込み・保存エラー", str(error), parent=self)
             return False
         self.book = book
         self.contacts_dirty = True
         self.path_var.set(path)
         self.refresh_contacts()
-        self.status.set("宛先JSONを全件置換しました。設定を保存して一覧へ反映してください。")
+        self.status.set("社員情報JSONを全件置換しました。設定を保存して一覧へ反映してください。")
         self.notebook.select(self.settings_page)
         return True
 
@@ -143,19 +143,36 @@ class Application(Layout, TkinterDnD.Tk):
         if self.busy:
             return
         window = tk.Toplevel(self)
-        window.title("宛先対応表")
-        window.geometry("700x450")
+        window.title("社員情報確認")
+        window.geometry("1120x650")
+        window.minsize(760, 450)
         window.transient(self)
         from .core import normalize_name
         counts: dict[str, int] = {}
         for contact in self.book.contacts:
             key = normalize_name(contact.name)
             counts[key] = counts.get(key, 0) + 1
-        text = ScrolledText(window, wrap="none")
-        text.pack(fill="both", expand=True, padx=12, pady=12)
-        rows = [f"{contact.name}\t{contact.email}" + ("\t【氏名重複】" if counts[normalize_name(contact.name)] > 1 else "")
-                for contact in self.book.contacts]
-        readonly_text(text, "氏名\tメールアドレス\n\n" + "\n".join(rows))
+        ttk.Label(window, text=f"社員情報 {len(self.book.contacts)}件  ·  CSVのA・B・C・J列の4項目を表示します。")\
+            .pack(anchor="w", padx=16, pady=(14, 10))
+        frame = ttk.Frame(window)
+        frame.pack(fill="both", expand=True, padx=14, pady=(0, 14))
+        table = EmployeeTable(frame, family=self.ui_font)
+        vertical = ttk.Scrollbar(frame, orient="vertical", command=table.yview)
+        horizontal = ttk.Scrollbar(frame, orient="horizontal", command=table.xview)
+        table.configure(yscrollcommand=vertical.set, xscrollcommand=horizontal.set)
+        table.grid(row=0, column=0, sticky="nsew")
+        vertical.grid(row=0, column=1, sticky="ns")
+        horizontal.grid(row=1, column=0, sticky="ew")
+        frame.rowconfigure(0, weight=1)
+        frame.columnconfigure(0, weight=1)
+        rows = []
+        for index, contact in enumerate(self.book.contacts):
+            problem = "氏名重複（宛先を一意に確定できません）" if counts[normalize_name(contact.name)] > 1 else ""
+            rows.append(GridRow(str(index), (contact.staff_id, contact.employee_id,
+                                             contact.name + ("\n【氏名重複】" if problem else ""), contact.email), problem))
+        table.set_rows(rows)
+        window.employee_table = table
+        self.employee_window = window
         window.grab_set()
 
     def reset_template(self) -> None:
@@ -196,7 +213,7 @@ class Application(Layout, TkinterDnD.Tk):
                     self.items[index] = replacement
             self.refresh_table()
         self.refresh_contacts()
-        self.contact_info.set(f"{len(self.book.contacts)}件の宛先をJSON保存済み")
+        self.contact_info.set(f"{len(self.book.contacts)}件の社員情報をJSON保存済み")
         self.update_mode_label()
         self.status.set("設定を保存しました。" + ("未実行メールの内容を更新しました。" if self.items else ""))
 
@@ -483,7 +500,7 @@ class Application(Layout, TkinterDnD.Tk):
         if self.has_unsaved_settings():
             message = "保存していない設定があります。保存せずに終了しますか？"
             if self.contacts_dirty:
-                message += "\n\nExcelから読み込んだ宛先JSONは保存済みです。"
+                message += "\n\n読み込んだ社員情報JSONは保存済みです。"
             if not messagebox.askyesno("未保存の設定", message, parent=self):
                 return
         self.destroy()

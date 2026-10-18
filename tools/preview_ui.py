@@ -20,7 +20,7 @@ def main():
     output.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory() as directory:
         settings = Settings(subject="契約締結完了のお知らせ", cc="jinji@example.com",
-                            address_book_path=str(ROOT / "samples" / "宛先サンプル.xlsx"))
+                            address_book_path=str(ROOT / "samples" / "社員情報サンプル.csv"))
         save_settings(settings, Path(directory) / "settings.json")
         app = Application(Path(directory), preview_mode=True)
         errors = []
@@ -32,10 +32,11 @@ def main():
         app.source_info.set("入力サンプル.txt  ·  サンプルデータ 3件")
         app.update()
 
-        def capture(name):
+        def capture(name, widget=None):
             app.update()
-            box = (app.winfo_rootx(), app.winfo_rooty(), app.winfo_rootx() + app.winfo_width(),
-                   app.winfo_rooty() + app.winfo_height())
+            widget = app if widget is None else widget
+            box = (widget.winfo_rootx(), widget.winfo_rooty(), widget.winfo_rootx() + widget.winfo_width(),
+                   widget.winfo_rooty() + widget.winfo_height())
             ImageGrab.grab(bbox=box).save(output / name)
 
         capture("input.png")
@@ -47,6 +48,8 @@ def main():
         capture("review.png")
         app.notebook.select(app.settings_page)
         capture("settings.png")
+        app.show_contacts()
+        capture("employees.png", app.employee_window)
         assert not errors, errors
         app.destroy()
     print(f"Captured actual application screens: {output}")

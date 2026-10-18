@@ -130,7 +130,7 @@ class FileDropTests(unittest.TestCase):
         self.assertEqual(self.app.contacts_path.read_bytes(), previous)
 
     def test_unsupported_directory_missing_and_empty_drops_are_rejected(self):
-        unsupported = self.path / "input.csv"
+        unsupported = self.path / "input.pdf"
         unsupported.write_text("x", encoding="utf-8")
         for paths in ((unsupported,), (self.path,), (self.path / "missing.txt",), ()):
             with self.subTest(paths=paths), patch("bulk_mailer.gui.messagebox.showwarning") as warning:

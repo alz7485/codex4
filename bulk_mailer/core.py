@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import csv
+import io
 import os
 import re
 import tempfile
@@ -170,6 +172,8 @@ def parse_cc(text: str) -> tuple[str, ...]:
 class Contact:
     name: str
     email: str
+    staff_id: str = ""
+    employee_id: str = ""
 
 
 @dataclass
@@ -179,7 +183,7 @@ class AddressBook:
     def resolve(self, name: str) -> str:
         matches = [contact for contact in self.contacts if normalize_name(contact.name) == normalize_name(name)]
         if not matches:
-            raise InputError("宛先未登録（Excelに氏名がありません）")
+            raise InputError("宛先未登録（社員情報に氏名がありません）")
         if len(matches) != 1:
             raise InputError("氏名の重複あり（宛先を手動で確定してください）")
         return matches[0].email
@@ -188,8 +192,10 @@ class AddressBook:
 def read_address_book(path: str | Path) -> AddressBook:
     from openpyxl import load_workbook
 
+    if Path(path).suffix.lower() == ".csv":
+        return read_employee_csv(path)
     if Path(path).suffix.lower() != ".xlsx":
-        raise InputError("宛先表は .xlsx 形式で保存してください。")
+        raise InputError("社員情報は .csv 形式を使用してください。旧版の .xlsx も読み込めます。")
     try:
         with ZipFile(path) as archive:
             if sum(entry.file_size for entry in archive.infolist()) > MAX_EXCEL_XML_BYTES:
@@ -233,6 +239,56 @@ def read_address_book(path: str | Path) -> AddressBook:
         raise InputError(f"Excelを読み込めません: {error}") from error
     finally:
         book.close()
+
+
+def read_employee_csv(path: str | Path) -> AddressBook:
+    """Project A/B/C/J only; IDs stay strings, unused CSV columns are discarded."""
+    try:
+        with Path(path).open("rb") as source:
+            data = source.read(MAX_CONTACTS_JSON_BYTES + 1)
+        if len(data) > MAX_CONTACTS_JSON_BYTES:
+            raise InputError("社員情報CSVが大きすぎます。100MiB以下に分割してください。")
+        if data.startswith((b"\xff\xfe", b"\xfe\xff")):
+            content = data.decode("utf-16")
+        else:
+            try:
+                content = data.decode("utf-8-sig")
+            except UnicodeDecodeError:
+                content = data.decode("cp932")
+    except UnicodeDecodeError as error:
+        raise InputError("社員情報CSVの文字コードを確認してください。UTF-8、UTF-16（BOMあり）、CP932に対応します。") from error
+    previous_limit = csv.field_size_limit()
+    try:
+        csv.field_size_limit(MAX_CONTACTS_JSON_BYTES)
+        rows = csv.reader(io.StringIO(content, newline=""), strict=True)
+        header = next(rows, [])
+        if len(header) < 10 or header[1].strip() != "派遣元スタッフコード":
+            raise InputError("社員情報CSVは1行目を見出しとし、B列の見出しを「派遣元スタッフコード」にしてください。A列＝スタッフID、B列＝社員ID、C列＝氏名、J列＝メールアドレスで読み込みます。")
+        contacts = []
+        for number, row in enumerate(rows, start=2):
+            if number > MAX_ADDRESS_ROWS + 1:
+                raise InputError("社員情報CSVは見出しを除き10万行以下に分割してください。")
+            selected = [row[index] if index < len(row) else "" for index in (0, 1, 2, 9)]
+            if not any(value.strip() for value in selected):
+                continue
+            if len(row) < 10:
+                raise InputError(f"CSVの{number}件目: J列までの列が不足しています。")
+            staff_id, employee_id, name, email = (value.strip() for value in selected)
+            if not name or _has_unsafe_controls(name, "\t"):
+                raise InputError(f"CSVの{number}件目: 氏名が空欄、または不正な文字を含んでいます。")
+            if any(_has_unsafe_controls(value) for value in (staff_id, employee_id)):
+                raise InputError(f"CSVの{number}件目: IDに不正な文字が含まれています。")
+            try:
+                contacts.append(Contact(name, validate_address(email), staff_id, employee_id))
+            except InputError as error:
+                raise InputError(f"CSVの{number}件目: {error}") from error
+        if not contacts:
+            raise InputError("CSVに社員情報が登録されていません。")
+        return AddressBook(contacts)
+    except csv.Error as error:
+        raise InputError(f"社員情報CSVの形式を確認してください: {error}") from error
+    finally:
+        csv.field_size_limit(previous_limit)
 
 
 def render_body(template: str, values: dict[str, str]) -> str:
@@ -300,7 +356,7 @@ def load_settings(path: Path) -> Settings:
 def _write_json_atomic(payload: dict, path: Path, max_bytes: int | None = None) -> None:
     text = json.dumps(payload, ensure_ascii=False, indent=2)
     if max_bytes is not None and len(text.encode("utf-8")) > max_bytes:
-        raise InputError("宛先JSONが大きすぎます。Excelを分割して読み込み直してください。")
+        raise InputError("社員情報JSONが大きすぎます。CSVを分割して読み込み直してください。")
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = None
     try:
@@ -322,17 +378,19 @@ def save_settings(settings: Settings, path: Path) -> None:
 
 
 def _parse_contacts_payload(payload: dict) -> tuple[AddressBook, str]:
-    if (not isinstance(payload, dict) or type(payload.get("version")) is not int
-            or payload.get("version") != 1 or not isinstance(payload.get("source_excel"), str)
-            or not isinstance(payload.get("contacts"), list)):
-        raise InputError("宛先JSONの形式が不正です。Excelから読み込み直してください。")
-    records = payload["contacts"]
-    if _has_unsafe_controls(payload["source_excel"]):
-        raise InputError("宛先JSONの元Excelパスに不正な文字が含まれています。")
+    if not isinstance(payload, dict) or type(payload.get("version")) is not int or payload["version"] not in (1, 2):
+        raise InputError("社員情報JSONの形式が不正です。CSVから読み込み直してください。")
+    version = payload["version"]
+    records = payload.get("employees" if version == 2 else "contacts")
+    source_file = payload.get("source_file" if version == 2 else "source_excel")
+    if not isinstance(records, list) or not isinstance(source_file, str):
+        raise InputError("社員情報JSONの形式が不正です。CSVから読み込み直してください。")
+    if _has_unsafe_controls(source_file):
+        raise InputError("社員情報JSONの元ファイルパスに不正な文字が含まれています。")
     if len(records) > MAX_ADDRESS_ROWS:
         raise InputError("宛先JSONの件数が多すぎます。10万件以下にしてください。")
     contacts = []
-    estimated_bytes = len(payload["source_excel"].encode("utf-8")) + 128
+    estimated_bytes = len(source_file.encode("utf-8")) + 128
     for number, row in enumerate(records, 1):
         if (not isinstance(row, dict) or not isinstance(row.get("name"), str)
                 or not isinstance(row.get("email"), str)):
@@ -341,22 +399,28 @@ def _parse_contacts_payload(payload: dict) -> tuple[AddressBook, str]:
         if not name or _has_unsafe_controls(name, "\t"):
             raise InputError(f"宛先JSONの{number}件目: 氏名が空欄、または不正な文字を含んでいます。")
         try:
+            staff_id = row.get("staff_id", "") if version == 1 else row.get("staff_id")
+            employee_id = row.get("employee_id", "") if version == 1 else row.get("employee_id")
+            if not isinstance(staff_id, str) or not isinstance(employee_id, str):
+                raise InputError("スタッフIDと社員IDは文字列で指定してください。")
+            if any(_has_unsafe_controls(value) for value in (staff_id, employee_id)):
+                raise InputError("IDに不正な文字が含まれています。")
             address = validate_address(row["email"])
-            estimated_bytes += len(name.encode("utf-8")) + len(address.encode("utf-8")) + 96
+            estimated_bytes += sum(len(value.encode("utf-8")) for value in (name, address, staff_id, employee_id)) + 128
             if estimated_bytes > MAX_CONTACTS_JSON_BYTES:
-                raise InputError("宛先JSONが大きすぎます。Excelを分割して読み込み直してください。")
-            contacts.append(Contact(name, address))
+                raise InputError("社員情報JSONが大きすぎます。CSVを分割して読み込み直してください。")
+            contacts.append(Contact(name, address, staff_id, employee_id))
         except InputError as error:
             raise InputError(f"宛先JSONの{number}件目: {error}") from error
-    return AddressBook(contacts), payload["source_excel"]
+    return AddressBook(contacts), source_file
 
 
 def save_contacts(book: AddressBook, path: Path, source_excel: str = "") -> None:
     """Replace the complete address book only after validation and durable write."""
-    payload = {"version": 1, "source_excel": source_excel,
-               "contacts": [asdict(contact) for contact in book.contacts]}
+    payload = {"version": 2, "source_file": source_excel,
+               "employees": [asdict(contact) for contact in book.contacts]}
     checked, _ = _parse_contacts_payload(payload)
-    payload["contacts"] = [asdict(contact) for contact in checked.contacts]
+    payload["employees"] = [asdict(contact) for contact in checked.contacts]
     _write_json_atomic(payload, path, MAX_CONTACTS_JSON_BYTES)
 
 
@@ -365,7 +429,7 @@ def load_contacts(path: Path) -> tuple[AddressBook, str]:
         with path.open("rb") as source:
             data = source.read(MAX_CONTACTS_JSON_BYTES + 1)
         if len(data) > MAX_CONTACTS_JSON_BYTES:
-            raise InputError("宛先JSONが大きすぎます。Excelを分割して読み込み直してください。")
+            raise InputError("社員情報JSONが大きすぎます。CSVを分割して読み込み直してください。")
         return _parse_contacts_payload(json.loads(data.decode("utf-8")))
     except (ValueError, TypeError, OSError, RecursionError) as error:
         raise InputError(f"宛先JSONを読み込めません: {path}\n{error}") from error
@@ -417,7 +481,7 @@ def prepare_mails(contracts: list[Contract], settings: Settings, book: AddressBo
         issue = ""
         matches = recipients.get(normalize_name(contract.values["氏名"]), [])
         if not matches:
-            to, issue = "", "宛先未登録（Excelに氏名がありません）"
+            to, issue = "", "宛先未登録（社員情報に氏名がありません）"
         elif len(matches) != 1:
             to, issue = "", "氏名の重複あり（宛先を手動で確定してください）"
         else:
