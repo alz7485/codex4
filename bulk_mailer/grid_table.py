@@ -17,6 +17,8 @@ class ContractTable(tk.Canvas):
     columns = ("included", "id", "worker", "period", "receiver")
     headings = ("対象", "管理番号／承認状態", "氏名・派遣元／メールアドレス", "受入開始・終了", "受入先情報")
     minimum_widths = (68, 128, 310, 160, 330)
+    lines_per_row = 2
+    vertical_padding = 12
 
     def __init__(self, parent, *, family: str):
         super().__init__(parent, background="white", highlightthickness=1,
@@ -24,7 +26,7 @@ class ContractTable(tk.Canvas):
                          borderwidth=0, takefocus=True, height=350)
         self.cell_font = tkfont.Font(self, family=family, size=9)
         self.header_font = tkfont.Font(self, family=family, size=9, weight="bold")
-        self.row_height = self.cell_font.metrics("linespace") * 2 + 24
+        self.row_height = self.cell_font.metrics("linespace") * self.lines_per_row + 2 * self.vertical_padding
         self.header_height = self.header_font.metrics("linespace") + 24
         self.rows: list[GridRow] = []
         self._by_id: dict[str, GridRow] = {}
@@ -185,7 +187,7 @@ class ContractTable(tk.Canvas):
             for column, cell_width in enumerate(widths):
                 self.create_rectangle(x, y, x + cell_width, y + self.row_height,
                                       fill=background, outline="#c6cfdb", tags=("cell", row.iid))
-                self.create_text(x + 14, y + 12, text=row.values[column].expandtabs(4), font=self.cell_font,
+                self.create_text(x + 14, y + self.vertical_padding, text=row.values[column].expandtabs(4), font=self.cell_font,
                                  fill=foreground, anchor="nw", tags=("cell_text", row.iid))
                 x += cell_width
             if row.iid in self._selected:
@@ -202,8 +204,10 @@ class ContractTable(tk.Canvas):
 
 class EmployeeTable(ContractTable):
     columns = ("staff_id", "employee_id", "name", "email")
-    headings = ("スタッフID", "社員ID（派遣元スタッフコード）", "氏名", "メールアドレス")
-    minimum_widths = (140, 240, 180, 320)
+    headings = ("スタッフID", "社員ID", "氏名", "メールアドレス")
+    minimum_widths = (140, 140, 180, 320)
+    lines_per_row = 1
+    vertical_padding = 6
 
     def display_widths(self) -> list[int]:
         widths = self.widths.copy()

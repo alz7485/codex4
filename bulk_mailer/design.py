@@ -366,7 +366,7 @@ class Layout:
         ttk.Separator(left).pack(fill="x", pady=14)
         ttk.Label(left, text="社員情報CSV", style="CardTitle.TLabel").pack(anchor="w", pady=(0, 9))
         ttk.Entry(left, textvariable=self.path_var, state="readonly").pack(fill="x", pady=(0, 8))
-        ttk.Label(left, text="A：スタッフID　B：社員ID（派遣元スタッフコード）\nC：氏名　J：メールアドレス。4項目をJSON保存・全件置換。", style="CardMuted.TLabel", wraplength=430).pack(anchor="w", pady=(0, 10))
+        ttk.Label(left, text="A：スタッフID　B：社員ID\nC：氏名　J：メールアドレス。4項目をJSON保存・全件置換。", style="CardMuted.TLabel", wraplength=430).pack(anchor="w", pady=(0, 10))
         self.contact_info = tk.StringVar(value="未登録：社員情報CSVを読み込んでください。")
         ttk.Label(left, textvariable=self.contact_info, style="CardMuted.TLabel", wraplength=430).pack(anchor="w")
         controls = ttk.Frame(left, style="Surface.TFrame")

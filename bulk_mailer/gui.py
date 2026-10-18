@@ -169,7 +169,7 @@ class Application(Layout, TkinterDnD.Tk):
         for index, contact in enumerate(self.book.contacts):
             problem = "氏名重複（宛先を一意に確定できません）" if counts[normalize_name(contact.name)] > 1 else ""
             rows.append(GridRow(str(index), (contact.staff_id, contact.employee_id,
-                                             contact.name + ("\n【氏名重複】" if problem else ""), contact.email), problem))
+                                             contact.name + (" 【氏名重複】" if problem else ""), contact.email), problem))
         table.set_rows(rows)
         window.employee_table = table
         self.employee_window = window
