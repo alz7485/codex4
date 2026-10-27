@@ -47,6 +47,23 @@ py -3 -m venv .venv
 
 新しいOutlookは対象外です。送信には従来版Outlookの既定アカウントを使用します。Outlookや組織の設定によっては、操作時に確認ダイアログが表示される場合があります。
 
+## 「No module named tkinterdnd2」と表示された場合
+
+起動に使ったPythonにドラッグ読み込み用のライブラリが入っていません。**アプリのフォルダーで `setup.bat` を再実行し、`start.bat` から起動してください。** `main.py` のダブルクリックでは別のPythonが使われることがあります。
+
+`start.bat` は必要なライブラリを確認し、不足していればアプリ専用の `.venv` へ `requirements.txt` のパッケージを導入してから起動します。この修復時はインターネット接続が必要です。インストールや確認に失敗した場合は起動せず、エラーを表示します。
+
+手動で修復する場合は、アプリのフォルダーの**コマンドプロンプト**で次を実行します。
+
+```bat
+.venv\Scripts\python.exe -m pip install -r requirements.txt
+start.bat
+```
+
+別のPythonから実行したい場合は、エラー画面に表示される、そのPythonのパスを使ったコマンドを実行してください。単に `pip install` だけを実行すると、別のPythonへ入る場合があります。
+
+EXE版の場合はPythonへの追加インストールでは解消しません。ZIPを展開し直してEXEと `_internal` フォルダー全体を揃えてください。ソースが古い場合は最新版で `build_exe.bat` を実行し、作り直したonedirフォルダー全体を配布してください。
+
 ## onedir形式のEXEを作成する
 
 **Windows上で `build_exe.bat` をダブルクリック**します。必要なパッケージをインストールした後、PyInstallerでビルドします。初回はPython 3.11以降とインターネット接続が必要です。
