@@ -3,6 +3,8 @@ from pathlib import Path
 import shutil
 import sys
 
+from bulk_mailer import APP_NAME, APP_VERSION
+
 
 def main() -> None:
     if sys.platform != "win32":
@@ -20,7 +22,7 @@ def main() -> None:
     shutil.copy2(root / "README.md", output / "README.md")
     shutil.copytree(root / "samples", output / "samples", dirs_exist_ok=True)
     shutil.copytree(root / "docs", output / "docs", dirs_exist_ok=True)
-    archive = shutil.make_archive(str(root / "dist" / "OutlookMailDesk-windows-onedir"), "zip",
+    archive = shutil.make_archive(str(root / "dist" / f"{APP_NAME}-v{APP_VERSION}-windows-onedir"), "zip",
                                   root_dir=output.parent, base_dir=output.name)
     print(f"\nCreated: {output / 'OutlookMailDesk.exe'}")
     print(f"Distribution ZIP: {archive}")

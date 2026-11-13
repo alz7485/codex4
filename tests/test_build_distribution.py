@@ -69,7 +69,7 @@ class DistributionAuditTests(unittest.TestCase):
                  patch.object(build_exe, "__file__", str(root / "build_exe.py")), \
                  patch.object(build_exe.sys, "platform", "win32"), patch("builtins.print"):
                 build_exe.main()
-            with ZipFile(root / "dist" / "OutlookMailDesk-windows-onedir.zip") as archive:
+            with ZipFile(root / "dist" / f"{build_exe.APP_NAME}-v{build_exe.APP_VERSION}-windows-onedir.zip") as archive:
                 for name in ("OutlookMailDesk.exe", "_internal/fixture.dll", "README.md",
                              "samples/example.txt", "docs/previews/review.png"):
                     self.assertIn("OutlookMailDesk/" + name, archive.namelist())

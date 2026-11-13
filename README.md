@@ -1,4 +1,4 @@
-# 契約通知アシスト
+# 契約通知アシスト v1.0.0
 
 Windows専用のPythonデスクトップアプリです。貼り付け・txt読み込みから契約通知メールの対象一覧を作り、内容を確認して従来版Outlookに下書きを保存、または送信します。
 
@@ -94,10 +94,10 @@ dist/
 │  ├─ samples/
 │  ├─ docs/                ← 画面画像・監査報告
 │  └─ README.md
-└─ OutlookMailDesk-windows-onedir.zip
+└─ 契約通知アシスト-v1.0.0-windows-onedir.zip
 ```
 
-`OutlookMailDesk-windows-onedir.zip` を配布し、展開後に `OutlookMailDesk.exe` を起動します。**EXEと `_internal` を含むフォルダー全体を配布してください。** 配布先へのPythonのインストールは不要で、従来版Outlookと設定済みのメールアカウントは必要です。
+`契約通知アシスト-v1.0.0-windows-onedir.zip` を配布し、展開後に `OutlookMailDesk.exe` を起動します。**EXEと `_internal` を含むフォルダー全体を配布してください。** 配布先へのPythonのインストールは不要で、従来版Outlookと設定済みのメールアカウントは必要です。
 
 設定と処理記録は引き続き `%LOCALAPPDATA%\OutlookBulkMailer` に保存します。EXEの配置フォルダーには保存しません。Windows用EXEの作成はWindows上で行い、Linuxからのクロスビルドはしません。
 
@@ -231,3 +231,9 @@ Windows上のEXEビルド・起動、エクスプローラーからの実ドラ�
 設定画面の「起動中のOutlookからアカウント取得」を押し、SMTPアドレスから差出人を選択して設定を保存してください。従来版Outlookを先に起動してください。選択はJSONに保存され、未実行メールへ反映されます。空欄は従来どおり既定アカウントを使います。実行確認にも差出人が表示されます。
 
 選んだアカウントが現在のOutlookに存在しないか、同じSMTPアドレスのアカウントが複数ある場合は、メールを作成する前に停止します。共有メールボックスなどAccountsコレクションに存在しない差出人は対象外です。下書き保存・送信の両方でSendUsingAccountを指定します。
+
+## バージョン付きZIP
+
+ソース版は `downloads/契約通知アシスト-v1.0.0.zip` からダウンロードできます。展開して `setup.bat` → `start.bat` の順に実行してください。このZIPはPythonソース版で、Windows用EXEではありません。
+
+`python build_source_zip.py` でソース版ZIPを作り直せます。バージョンは `bulk_mailer/__init__.py` の `APP_VERSION` で管理します。EXE版のビルドでも同じ番号を使い、`契約通知アシスト-v1.0.0-windows-onedir.zip` を作成します。

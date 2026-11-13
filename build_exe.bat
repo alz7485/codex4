@@ -11,7 +11,7 @@ if errorlevel 1 goto error
 if errorlevel 1 goto error
 echo.
 echo Build completed: dist\OutlookMailDesk\OutlookMailDesk.exe
-echo Distribute dist\OutlookMailDesk-windows-onedir.zip to other PCs.
+echo Distribution ZIP path is shown above.
 pause
 exit /b 0
 :error
