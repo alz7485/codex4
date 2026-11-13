@@ -34,8 +34,21 @@ class OutlookClient:
         self.application = None
         self.pythoncom.CoUninitialize()
 
+    def accounts(self):
+        return [(str(a.DisplayName), str(a.SmtpAddress))
+                for a in self.application.Session.Accounts if str(a.SmtpAddress).strip()]
+
+    def select_sender(self, address):
+        matches = [a for a in self.application.Session.Accounts
+                   if str(a.SmtpAddress).strip().casefold() == address.casefold()]
+        if len(matches) != 1:
+            raise InputError("選択した差出人がOutlookに存在しないか重複しています。アカウント一覧を再取得してください。")
+        self.sender_account = matches[0]
+
     def create(self, item: MailItem, mode: str) -> str:
         mail = self.application.CreateItem(0)
+        if item.sender:
+            mail.SendUsingAccount = self.sender_account
         for address, kind in [(item.to, 1), *((address, 2) for address in item.cc)]:
             recipient = mail.Recipients.Add(address)
             recipient.Type = kind
@@ -182,6 +195,11 @@ def execute_batch(items: list[MailItem], mode: str, journal_path: Path,
         client = None
         try:
             client = factory()
+            senders = {item.sender for item in items}
+            if len(senders) != 1:
+                raise InputError("差出人が統一されていません。リストを再作成してください。")
+            if items[0].sender:
+                client.select_sender(items[0].sender)
             for index, item in enumerate(items):
                 item.validate()
                 journal.write(item, mode, "開始")
@@ -223,3 +241,22 @@ def execute_batch(items: list[MailItem], mode: str, journal_path: Path,
                 cleanup_errors.append(error)
             if cleanup_errors and primary_error is None:
                 raise cleanup_errors[0]
+
+
+def running_accounts():
+    """Read the existing classic Outlook instance without starting another one."""
+    if os.name != "nt":
+        raise InputError("Windowsの従来版Outlookを起動してください。")
+    import pythoncom
+    import win32com.client
+    pythoncom.CoInitialize()
+    application = None
+    try:
+        application = win32com.client.GetActiveObject("Outlook.Application")
+        return [(str(a.DisplayName), str(a.SmtpAddress).strip())
+                for a in application.Session.Accounts if str(a.SmtpAddress).strip()]
+    except Exception as error:
+        raise InputError(f"起動中の従来版Outlookから取得できません。Outlookを起動してください。\n{error}") from error
+    finally:
+        application = None
+        pythoncom.CoUninitialize()

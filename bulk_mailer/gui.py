@@ -180,8 +180,22 @@ class Application(Layout, TkinterDnD.Tk):
             self.template_input.delete("1.0", "end")
             self.template_input.insert("1.0", DEFAULT_TEMPLATE)
 
+    def fetch_sender_accounts(self):
+        if self.busy:
+            return
+        from .outlook import running_accounts
+        try:
+            accounts = running_accounts()
+            addresses = list(dict.fromkeys(address for _, address in accounts))
+            if not addresses:
+                raise InputError("SMTPアドレスのあるOutlookアカウントがありません。")
+            self.sender_combo.configure(values=["", *addresses])
+            self.status.set("差出人を選択し、設定を保存して一覧へ反映してください。")
+        except (InputError, ImportError) as error:
+            messagebox.showerror("Outlookアカウント取得", str(error), parent=self)
+
     def form_settings(self) -> Settings:
-        return Settings(subject=self.subject_var.get().strip(),
+        return Settings(sender=self.sender_var.get().strip(), subject=self.subject_var.get().strip(),
                         cc=self.cc_input.get("1.0", "end-1c"),
                         template=self.template_input.get("1.0", "end-1c"),
                         mode=self.mode_var.get(), address_book_path=self.path_var.get())
@@ -440,7 +454,7 @@ class Application(Layout, TkinterDnD.Tk):
             return
         mode = self.settings.mode
         action = "送信します" if mode == "send" else "Outlookの下書きに保存します"
-        detail = "\n送信にはOutlookの既定アカウントを使用します。" if mode == "send" else ""
+        detail = "\n差出人: " + (self.settings.sender or "Outlookの既定アカウント")
         if not messagebox.askyesno("送信確認" if mode == "send" else "下書き保存の確認",
                                   f"一覧で全件の宛先・本文を確認しましたか？\n\n{len(items)}件のメールを{action}。\n件名: {self.settings.subject}{detail}\n\n実行しますか？", parent=self):
             return

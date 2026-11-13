@@ -312,6 +312,7 @@ class Settings:
     template: str = DEFAULT_TEMPLATE
     mode: str = "draft"
     address_book_path: str = ""
+    sender: str = ""
 
     def validate(self, *, execution: bool = False) -> None:
         if not all(isinstance(value, str) for value in asdict(self).values()):
@@ -328,6 +329,8 @@ class Settings:
             raise InputError("本文テンプレートが空です。")
         if _has_unsafe_controls(self.template, "\r\n\t"):
             raise InputError("本文テンプレートに制御文字または不可視文字が含まれています。")
+        if self.sender:
+            validate_address(self.sender)
         parse_cc(self.cc)
         render_body(self.template, dict.fromkeys(FIELDS, "確認"))
 
@@ -445,6 +448,7 @@ class MailItem:
     issue: str = ""
     included: bool = True
     status: str = "未実行"
+    sender: str = ""
 
     def validate_content(self) -> None:
         if self.issue:
@@ -489,5 +493,5 @@ def prepare_mails(contracts: list[Contract], settings: Settings, book: AddressBo
         if counts[contract.values["管理番号"]] > 1:
             issue = "管理番号が重複しています。入力テキストを確認してください。"
         result.append(MailItem(contract, to, cc, settings.subject,
-                               render_body(settings.template, contract.values), issue))
+                               render_body(settings.template, contract.values), sender=settings.sender, issue=issue))
     return result

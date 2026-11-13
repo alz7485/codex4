@@ -339,6 +339,7 @@ class Layout:
     def build_settings(self):
         page = self.settings_page
         self.heading(page, "メールの設定", "社員情報と、全メールで共通の件名・CC・本文テンプレートを管理します。")
+        self.sender_var = tk.StringVar(value=self.settings.sender)
         self.subject_var = tk.StringVar(value=self.settings.subject)
         self.path_var = tk.StringVar(value=self.settings.address_book_path)
         self.mode_var = tk.StringVar(value=self.settings.mode)
@@ -350,6 +351,10 @@ class Layout:
         left_outer, left = scroll_card(panels, 22)
         left_outer.grid(row=0, column=0, sticky="nsew", padx=(0, 18))
         ttk.Label(left, text="基本設定", style="CardTitle.TLabel").pack(anchor="w", pady=(0, 16))
+        ttk.Label(left, text="差出人（空欄はOutlookの既定アカウント）", style="Card.TLabel").pack(anchor="w")
+        self.sender_combo = ttk.Combobox(left, textvariable=self.sender_var, state="readonly")
+        self.sender_combo.pack(fill="x", pady=7)
+        ttk.Button(left, text="起動中のOutlookからアカウント取得", command=self.fetch_sender_accounts).pack(anchor="w", pady=(0, 12))
         ttk.Label(left, text="共通の件名", style="Card.TLabel").pack(anchor="w", pady=(0, 7))
         ttk.Entry(left, textvariable=self.subject_var).pack(fill="x")
         ttk.Label(left, text="未定の間は空欄で保存できます。作成前に入力してください。", style="CardMuted.TLabel", wraplength=430).pack(anchor="w", pady=(7, 10))
