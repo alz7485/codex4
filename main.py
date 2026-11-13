@@ -3,6 +3,8 @@ import importlib
 from pathlib import Path
 import sys
 
+from bulk_mailer import APP_NAME
+
 
 def check_dependencies() -> None:
     modules = ["tkinter", "tkinterdnd2", "openpyxl"]
@@ -34,7 +36,7 @@ def main() -> int:
             print(message, file=sys.stderr)
         if sys.platform == "win32" and not check_only:
             import ctypes
-            ctypes.windll.user32.MessageBoxW(0, message, "契約通知アシスト：起動エラー", 0x10)
+            ctypes.windll.user32.MessageBoxW(0, message, f"{APP_NAME}：起動エラー", 0x10)
         return 1
     if not check_only:
         from bulk_mailer.gui import main as run_gui

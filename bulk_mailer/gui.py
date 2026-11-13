@@ -12,6 +12,7 @@ from tkinter.scrolledtext import ScrolledText
 from tkinterdnd2 import COPY, DND_FILES, REFUSE_DROP, TkinterDnD
 from uuid import uuid4
 
+from . import APP_NAME
 from .core import (
     AddressBook, DEFAULT_TEMPLATE, FIELDS, InputError, MailItem, Settings,
     data_directory, load_contacts, load_settings, parse_cc, parse_contracts, prepare_mails,
@@ -32,7 +33,7 @@ def readonly_text(widget: tk.Text, value: str) -> None:
 class Application(Layout, TkinterDnD.Tk):
     def __init__(self, data_dir: Path | None = None, *, preview_mode: bool = False) -> None:
         super().__init__()
-        self.title("Mail Desk — 契約通知メール作成")
+        self.title(APP_NAME)
         self.geometry(f"{min(1500, max(1120, self.winfo_screenwidth() - 60))}x{min(940, max(700, self.winfo_screenheight() - 100))}")
         self.minsize(1120, 700)
         self.preview_mode = preview_mode

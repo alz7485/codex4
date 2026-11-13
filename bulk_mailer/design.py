@@ -5,6 +5,7 @@ import tkinter as tk
 from tkinter import font as tkfont, ttk
 from tkinter.scrolledtext import ScrolledText
 
+from . import APP_NAME
 from .core import FIELDS
 from .grid_table import ContractTable
 
@@ -143,7 +144,7 @@ class Layout:
         if hasattr(self, "app_icon"):
             self.brand_icon = self.app_icon.subsample(2, 2)
             tk.Label(brand, image=self.brand_icon, bg=NAV).pack(anchor="w", pady=(0, 12))
-        tk.Label(brand, text="MAIL DESK", bg=NAV, fg=WHITE, font=(self.ui_font, 17, "bold")).pack(anchor="w")
+        tk.Label(brand, text=APP_NAME, bg=NAV, fg=WHITE, font=(self.ui_font, 12, "bold")).pack(anchor="w")
         tk.Label(brand, text="契約通知メール作成", bg=NAV, fg="#9fb0c9", font=(self.ui_font, 9)).pack(anchor="w", pady=(5, 0))
         tk.Label(sidebar, text="ワークスペース", bg=NAV, fg="#7287a6", font=(self.ui_font, 8)).pack(anchor="w", padx=24, pady=(4, 10))
         self.nav_buttons = []
